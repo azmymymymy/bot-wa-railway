@@ -92,32 +92,30 @@ client.on('message', async msg => {
         chat.sendMessage(teks); // Tanpa mention
     }
     if (msg.body.startsWith('!brat ')) {
-        const text = msg.body.slice(6).trim();
-        if (!text) return msg.reply('❌ Masukkan teksnya, contoh: !brat Aku lapar');
+  const text = msg.body.slice(6).trim();
+  if (!text) return msg.reply('❗ Masukkan teksnya, contoh: !brat Aku lapar');
 
-        msg.reply('⏳ Membuat BRAT...');
+ // msg.reply('⏳ Membuat BRAT...');
 
-        try {
-            const res = await axios.post('https://api.siputzx.my.id/api/m/brat', {
-                text: text
-            }, {
-                headers: { 'Content-Type': 'application/json' }
-            });
+  try {
+    const res = await axios.post(
+      'https://api.siputzx.my.id/api/m/brat',
+      { text },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        responseType: 'arraybuffer'  // <- penting!
+      }
+    );
 
-            console.log('Response dari API:', res.data); // debug
+    const base64 = Buffer.from(res.data, 'binary').toString('base64');
+    const media = new MessageMedia('image/png', base64, 'brat.png');
+    await client.sendMessage(msg.from, media, { sendMediaAsSticker: true });
+  } catch (err) {
+    console.error('❌ ERROR:', err.message);
+    msg.reply('❌ Gagal membuat stiker BRAT.');
+  }
+}
 
-            if (!res.data || !res.data.status || !res.data.image) {
-                return msg.reply('❌ Gagal membuat BRAT. Cek log.');
-            }
-
-            const base64 = res.data.image.replace(/^data:image\/\w+;base64,/, '');
-            const media = new MessageMedia('image/png', base64, 'brat.png');
-            await client.sendMessage(msg.from, media, { sendMediaAsSticker: true });
-        } catch (err) {
-            console.error('ERROR:', err);
-            msg.reply('❌ Terjadi kesalahan saat membuat stiker BRAT.');
-        }
-    }
 });
 
 client.initialize();
