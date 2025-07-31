@@ -65,15 +65,12 @@ client.on('message', async msg => {
     const res = await axios.post(
       'https://api.siputzx.my.id/api/ai/deepseek',
       {
-        message: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
+        message: [prompt]  // <== ini array berisi string
       },
       {
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json'
+        }
       }
     );
 
