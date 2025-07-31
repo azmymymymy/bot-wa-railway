@@ -112,7 +112,7 @@ client.on('message', async msg => {
         }
     }
         // Command !removebg (hanya berlaku jika reply/ada media)
-    if (message.toLowerCase() === '!removebg' && msg.hasMedia) {
+if (msg.body.toLowerCase() === '!removebg' && msg.hasMedia) {
         try {
             const media = await msg.downloadMedia();
             const buffer = Buffer.from(media.data, 'base64');
