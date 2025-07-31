@@ -95,26 +95,26 @@ client.on('message', async msg => {
         const text = msg.body.slice(6).trim();
         if (!text) return msg.reply('❌ Masukkan teksnya, contoh: !brat Aku lapar');
 
-        //msg.reply('⏳ Membuat BRAT...');
+        msg.reply('⏳ Membuat BRAT...');
 
         try {
             const res = await axios.post('https://api.siputzx.my.id/api/m/brat', {
                 text: text
+            }, {
+                headers: { 'Content-Type': 'application/json' }
             });
 
-            if (!res.data.status) {
-                return msg.reply('❌ Gagal membuat BRAT.');
+            console.log('Response dari API:', res.data); // debug
+
+            if (!res.data || !res.data.status || !res.data.image) {
+                return msg.reply('❌ Gagal membuat BRAT. Cek log.');
             }
 
-            // Ambil base64 dan ubah ke media
-            const base64 = res.data.image; // tanpa prefix data:image/png;base64,
-            const buffer = Buffer.from(base64, 'base64');
+            const base64 = res.data.image.replace(/^data:image\/\w+;base64,/, '');
             const media = new MessageMedia('image/png', base64, 'brat.png');
-
-            // Kirim sebagai stiker
             await client.sendMessage(msg.from, media, { sendMediaAsSticker: true });
         } catch (err) {
-            console.error(err.message);
+            console.error('ERROR:', err);
             msg.reply('❌ Terjadi kesalahan saat membuat stiker BRAT.');
         }
     }
