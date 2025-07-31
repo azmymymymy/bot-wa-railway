@@ -59,9 +59,6 @@ client.on('message', async msg => {
      if (msg.body.startsWith('!ask')) {
   const prompt = msg.body.slice(5).trim();
 
-  if (msg.body.startsWith('!ask')) {
-  const prompt = msg.body.slice(5).trim();
-
   if (!prompt) return msg.reply('❗ Masukkan pertanyaan setelah !ask');
 
   try {
@@ -87,6 +84,7 @@ client.on('message', async msg => {
     msg.reply('❌ Gagal menghubungi AI.');
   }
 }
+
 
     // Fitur !all (khusus admin grup) tanpa mention
     if (text.startsWith('!all ') && msg.from.endsWith('@g.us')) {
