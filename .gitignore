@@ -14,7 +14,6 @@ Thumbs.db
 .vscode/
 
 # Auth/session WhatsApp
-.wwebjs_auth/
 
 # Env
 .env
