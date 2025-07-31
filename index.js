@@ -58,29 +58,19 @@ client.on('message', async msg => {
     // AI Command (!ai <prompt>)
      if (msg.body.startsWith('!ask')) {
   const prompt = msg.body.slice(5).trim();
-
   if (!prompt) return msg.reply('❗ Masukkan pertanyaan setelah !ask');
 
   try {
-    const res = await axios.post(
-      'https://api.siputzx.my.id/api/ai/deepseek',
-      {
-        message: [prompt]  // <== ini array berisi string
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    const aiResponse = res.data.result || '⚠️ Tidak ada balasan.';
-    msg.reply(`🤖 ${aiResponse}`);
+    const res = await axios.get(`https://api.siputzx.my.id/api/ai/deepseek-llm-67b-chat?content=${encodeURIComponent(prompt)}`);
+    
+    const jawaban = res.data?.data || '⚠️ Tidak ada jawaban dari AI.';
+    msg.reply(`🤖 ${jawaban}`);
   } catch (e) {
     console.error('❌ Error:', e.response?.data || e.message);
     msg.reply('❌ Gagal menghubungi AI.');
   }
 }
+
 
 
     // Fitur !all (khusus admin grup) tanpa mention
