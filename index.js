@@ -4,15 +4,19 @@ const path = './users.json';
 
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: { args: ['--no-sandbox'] },
+    puppeteer: { headless: true },
+    qrTimeout: 300000 // 5 menit (dalam milidetik)
 });
+
 
 let users = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path)) : [];
 
-client.on('qr', qr => {
-    const qrcode = require('qrcode-terminal');
-    qrcode.generate(qr, { small: true });
+client.on('qr', (qr) => {
+  console.log('⬇⬇⬇ QR CODE STRING ⬇⬇⬇');
+  console.log(qr);
+  console.log('⬆⬆⬆ COPY STRING QR DI ATAS ⬆⬆⬆');
 });
+
 
 client.on('ready', () => console.log('Bot siap.'));
 
