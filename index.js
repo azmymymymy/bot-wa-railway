@@ -29,7 +29,7 @@ client.on('message', async msg => {
         users.push({ id: sender, alias });
         fs.writeFileSync(path, JSON.stringify(users, null, 2));
         setTimeout(() => {
-            msg.reply(`Halo ${alias}, kamu tercatat.`);
+            //msg.reply(`Halo ${alias}, kamu tercatat.`);
         }, 5000);
         return;
     }
