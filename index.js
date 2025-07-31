@@ -1,57 +1,94 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const fs = require('fs');
+const axios = require('axios');
 const path = './users.json';
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { args: ['--no-sandbox'] },
-        qrTimeout: 300000 // 5 menit (dalam milidetik)
-
+    qrTimeout: 300000 // 5 menit
 });
 
 let users = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path)) : [];
 
 client.on('qr', (qr) => {
-  console.log('⬇⬇⬇ QR CODE STRING ⬇⬇⬇');
-  console.log(qr);
-  console.log('⬆⬆⬆ COPY STRING QR DI ATAS ⬆⬆⬆');
+    console.log('⬇⬇⬇ QR CODE STRING ⬇⬇⬇');
+    console.log(qr);
+    console.log('⬆⬆⬆ COPY STRING QR DI ATAS ⬆⬆⬆');
 });
-
 
 client.on('ready', () => console.log('Bot siap.'));
 
-client.on('message', msg => {
+client.on('message', async msg => {
     const sender = msg.from;
     const user = users.find(u => u.id === sender);
 
+    // Cek & simpan user baru
     if (!user) {
         const alias = `client${users.length + 1}`;
         users.push({ id: sender, alias });
         fs.writeFileSync(path, JSON.stringify(users, null, 2));
-
         setTimeout(() => {
             msg.reply(`Halo ${alias}, kamu tercatat.`);
         }, 5000);
-
         return;
     }
 
-    if (msg.body === '!menu') {
+    const text = msg.body.trim();
+
+    // Menu
+    if (text === '!menu') {
         setTimeout(() => {
-            msg.reply('1. !ping\n2. !info');
+            msg.reply('1. !ping\n2. !info\n3. !ai <pertanyaan>');
         }, 5000);
     }
 
-    if (msg.body === '!ping') {
+    if (text === '!ping') {
         setTimeout(() => {
             msg.reply('pong');
         }, 5000);
     }
 
-    if (msg.body === '!info') {
+    if (text === '!info') {
         setTimeout(() => {
             msg.reply(`Kamu: ${user.alias} (${user.id})`);
         }, 5000);
+    }
+
+    // AI Command (!ai <prompt>)
+    if (text.startsWith('!ai ')) {
+        const prompt = text.slice(4).trim();
+        if (!prompt) return;
+
+        try {
+            const res = await axios.post('https://api.siputzx.my.id/api/ai/deepseek', {
+                message: prompt
+            });
+
+            const jawaban = res.data.result || '⚠️ Tidak ada balasan.';
+            msg.reply(jawaban);
+        } catch (e) {
+            msg.reply('❌ Gagal menghubungi AI.');
+        }
+    }
+
+    // Fitur !all (khusus admin grup) tanpa mention
+    if (text.startsWith('!all ') && msg.from.endsWith('@g.us')) {
+        const chat = await msg.getChat();
+
+        if (!chat.isGroup) return;
+
+        const authorId = msg.author || msg.from;
+        const participants = await chat.participants;
+        const senderData = participants.find(p => p.id._serialized === authorId);
+
+        if (!senderData || !senderData.isAdmin) {
+            msg.reply('❌ Hanya admin yang boleh menggunakan perintah ini.');
+            return;
+        }
+
+        const teks = text.slice(5).trim();
+        chat.sendMessage(teks); // Tanpa mention
     }
 });
 
