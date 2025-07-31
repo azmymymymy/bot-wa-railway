@@ -91,6 +91,33 @@ client.on('message', async msg => {
         const teks = text.slice(5).trim();
         chat.sendMessage(teks); // Tanpa mention
     }
+    if (msg.body.startsWith('!brat ')) {
+        const text = msg.body.slice(6).trim();
+        if (!text) return msg.reply('❌ Masukkan teksnya, contoh: !brat Aku lapar');
+
+        msg.reply('⏳ Membuat BRAT...');
+
+        try {
+            const res = await axios.post('https://api.siputzx.my.id/api/m/brat', {
+                text: text
+            });
+
+            if (!res.data.status) {
+                return msg.reply('❌ Gagal membuat BRAT.');
+            }
+
+            // Ambil base64 dan ubah ke media
+            const base64 = res.data.image; // tanpa prefix data:image/png;base64,
+            const buffer = Buffer.from(base64, 'base64');
+            const media = new MessageMedia('image/png', base64, 'brat.png');
+
+            // Kirim sebagai stiker
+            await client.sendMessage(msg.from, media, { sendMediaAsSticker: true });
+        } catch (err) {
+            console.error(err.message);
+            msg.reply('❌ Terjadi kesalahan saat membuat stiker BRAT.');
+        }
+    }
 });
 
 client.initialize();
