@@ -1,14 +1,13 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
 const axios = require('axios');
-const path = './users.json';
 const FormData = require('form-data');
-
+const path = './users.json';
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { args: ['--no-sandbox'] },
-    qrTimeout: 300000 // 5 menit
+    qrTimeout: 300000
 });
 
 let users = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path)) : [];
@@ -19,56 +18,53 @@ client.on('qr', (qr) => {
     console.log('⬆⬆⬆ COPY STRING QR DI ATAS ⬆⬆⬆');
 });
 
-client.on('ready', () => console.log('Bot siap.'));
+client.on('ready', () => console.log('✅ Bot siap.'));
 
-client.on('message', async msg => {
+client.on('message', async (msg) => {
     const sender = msg.from;
     const user = users.find(u => u.id === sender);
 
+    // Catat user baru
     if (!user) {
         const alias = `client${users.length + 1}`;
         users.push({ id: sender, alias });
         fs.writeFileSync(path, JSON.stringify(users, null, 2));
-        return;
+        return; // tidak perlu membalas
     }
 
-    const text = msg.body.trim();
+    const text = msg.body.trim().toLowerCase();
 
-    // Menu
+    // !menu
     if (text === '!menu') {
-        return setTimeout(() => {
-            msg.reply('1. !ping\n2. !info\n3. !ask <pertanyaan>\n4. !brat <teks>');
-        }, 5000);
+        return msg.reply('📋 Menu:\n1. !ping\n2. !info\n3. !ask <pertanyaan>\n4. !brat <teks>\n5. !removebg (dengan gambar)');
     }
 
+    // !ping
     if (text === '!ping') {
-        return setTimeout(() => {
-            msg.reply('pong');
-        }, 5000);
+        return msg.reply('🏓 pong');
     }
 
+    // !info
     if (text === '!info') {
-        return setTimeout(() => {
-            msg.reply(`Kamu: ${user.alias} (${user.id})`);
-        }, 5000);
+        return msg.reply(`📌 Kamu: ${user.alias} (${user.id})`);
     }
 
-    // AI
+    // !ask
     if (text.startsWith('!ask')) {
-        const prompt = text.slice(5).trim();
-        if (!prompt) return setTimeout(() => msg.reply('❗ Masukkan pertanyaan setelah !ask'), 5000);
+        const prompt = msg.body.slice(5).trim();
+        if (!prompt) return msg.reply('❗ Masukkan pertanyaan setelah `!ask`');
 
         try {
             const res = await axios.get(`https://api.siputzx.my.id/api/ai/deepseek-llm-67b-chat?content=${encodeURIComponent(prompt)}`);
             const jawaban = res.data?.data || '⚠️ Tidak ada jawaban dari AI.';
-            return setTimeout(() => msg.reply(`🤖 ${jawaban}`), 5000);
-        } catch (e) {
-            console.error('❌ Error:', e.response?.data || e.message);
-            return setTimeout(() => msg.reply('❌ Gagal menghubungi AI.'), 5000);
+            return msg.reply(`🤖 ${jawaban}`);
+        } catch (err) {
+            console.error('❌ Error AI:', err.response?.data || err.message);
+            return msg.reply('❌ Gagal menghubungi AI.');
         }
     }
 
-    // Grup !all
+    // !all (hanya di grup)
     if (text.startsWith('!all ') && msg.from.endsWith('@g.us')) {
         const chat = await msg.getChat();
         if (!chat.isGroup) return;
@@ -77,18 +73,18 @@ client.on('message', async msg => {
         const participants = await chat.participants;
         const senderData = participants.find(p => p.id._serialized === authorId);
 
-        if (!senderData || !senderData.isAdmin) {
-            return setTimeout(() => msg.reply('❌ Hanya admin yang boleh menggunakan perintah ini.'), 5000);
+        if (!senderData?.isAdmin) {
+            return msg.reply('❌ Hanya admin yang boleh menggunakan perintah ini.');
         }
 
-        const teks = text.slice(5).trim();
-        return setTimeout(() => chat.sendMessage(teks), 5000); // tanpa mention
+        const teks = msg.body.slice(5).trim();
+        return chat.sendMessage(teks);
     }
 
-    // BRAT
+    // !brat
     if (text.startsWith('!brat ')) {
-        const bratText = text.slice(6).trim();
-        if (!bratText) return setTimeout(() => msg.reply('❗ Masukkan teksnya, contoh: !brat Aku lapar'), 5000);
+        const bratText = msg.body.slice(6).trim();
+        if (!bratText) return msg.reply('❗ Contoh: `!brat Aku lapar`');
 
         try {
             const res = await axios.post(
@@ -100,23 +96,23 @@ client.on('message', async msg => {
                 }
             );
 
-            const base64 = Buffer.from(res.data, 'binary').toString('base64');
+            const base64 = Buffer.from(res.data).toString('base64');
             const media = new MessageMedia('image/png', base64, 'brat.png');
+            return client.sendMessage(msg.from, media, { sendMediaAsSticker: true });
 
-            return setTimeout(() => {
-                client.sendMessage(msg.from, media, { sendMediaAsSticker: true });
-            }, 5000);
         } catch (err) {
-            console.error('❌ ERROR:', err.message);
-            return setTimeout(() => msg.reply('❌ Gagal membuat stiker BRAT.'), 5000);
+            console.error('❌ Gagal membuat BRAT:', err.message);
+            return msg.reply('❌ Gagal membuat stiker BRAT.');
         }
     }
-        // Command !removebg (hanya berlaku jika reply/ada media)
-if (msg.body.toLowerCase() === '!removebg' && msg.hasMedia) {
+
+    // !removebg
+    if (text === '!removebg' && msg.hasMedia) {
         try {
             const media = await msg.downloadMedia();
-            const buffer = Buffer.from(media.data, 'base64');
+            if (!media || !media.mimetype) return msg.reply('⚠️ Gagal membaca media.');
 
+            const buffer = Buffer.from(media.data, 'base64');
             const formData = new FormData();
             formData.append('image', buffer, {
                 filename: 'image.jpg',
@@ -135,11 +131,11 @@ if (msg.body.toLowerCase() === '!removebg' && msg.hasMedia) {
             );
 
             const output = new MessageMedia('image/png', Buffer.from(response.data).toString('base64'), 'nobg.png');
-            await client.sendMessage(msg.from, output);
+            return client.sendMessage(msg.from, output);
 
         } catch (err) {
             console.error('❌ Gagal hapus background:', err.message);
-            msg.reply('❌ Gagal menghapus background.');
+            return msg.reply('❌ Gagal menghapus background.');
         }
     }
 
