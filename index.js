@@ -95,7 +95,7 @@ client.on('message', async msg => {
         const text = msg.body.slice(6).trim();
         if (!text) return msg.reply('❌ Masukkan teksnya, contoh: !brat Aku lapar');
 
-        msg.reply('⏳ Membuat BRAT...');
+        //msg.reply('⏳ Membuat BRAT...');
 
         try {
             const res = await axios.post('https://api.siputzx.my.id/api/m/brat', {
