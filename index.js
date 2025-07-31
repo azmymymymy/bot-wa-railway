@@ -59,19 +59,31 @@ client.on('message', async msg => {
      if (msg.body.startsWith('!ask')) {
   const prompt = msg.body.slice(5).trim();
 
+  if (msg.body.startsWith('!ask')) {
+  const prompt = msg.body.slice(5).trim();
+
   if (!prompt) return msg.reply('❗ Masukkan pertanyaan setelah !ask');
 
   try {
     const res = await axios.post(
       'https://api.siputzx.my.id/api/ai/deepseek',
-      { message: [prompt] },
-      { headers: { 'Content-Type': 'application/json' } }
+      {
+        message: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      },
+      {
+        headers: { 'Content-Type': 'application/json' }
+      }
     );
 
-    const aiResponse = res.data.result || 'Tidak ada jawaban dari AI.';
+    const aiResponse = res.data.result || '⚠️ Tidak ada balasan.';
     msg.reply(`🤖 ${aiResponse}`);
   } catch (e) {
-    console.error('Error:', e.response?.data || e.message);
+    console.error('❌ Error:', e.response?.data || e.message);
     msg.reply('❌ Gagal menghubungi AI.');
   }
 }
