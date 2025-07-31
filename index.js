@@ -131,7 +131,7 @@ client.on('message', async (msg) => {
             );
 
             const output = new MessageMedia('image/png', Buffer.from(response.data).toString('base64'), 'nobg.png');
-            return client.sendMessage(msg.from, output);
+return client.sendMessage(msg.from, output, { sendMediaAsDocument: true });
 
         } catch (err) {
             console.error('❌ Gagal hapus background:', err.message);
