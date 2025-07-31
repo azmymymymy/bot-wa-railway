@@ -56,21 +56,25 @@ client.on('message', async msg => {
     }
 
     // AI Command (!ai <prompt>)
-    if (text.startsWith('!ai ')) {
-        const prompt = text.slice(4).trim();
-        if (!prompt) return;
+     if (msg.body.startsWith('!ask')) {
+  const prompt = msg.body.slice(5).trim();
 
-        try {
-            const res = await axios.post('https://api.siputzx.my.id/api/ai/deepseek', {
-                message: prompt
-            });
+  if (!prompt) return msg.reply('❗ Masukkan pertanyaan setelah !ask');
 
-            const jawaban = res.data.result || '⚠️ Tidak ada balasan.';
-            msg.reply(jawaban);
-        } catch (e) {
-            msg.reply('❌ Gagal menghubungi AI.');
-        }
-    }
+  try {
+    const res = await axios.post(
+      'https://api.siputzx.my.id/api/ai/deepseek',
+      { message: [prompt] },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+
+    const aiResponse = res.data.result || 'Tidak ada jawaban dari AI.';
+    msg.reply(`🤖 ${aiResponse}`);
+  } catch (e) {
+    console.error('Error:', e.response?.data || e.message);
+    msg.reply('❌ Gagal menghubungi AI.');
+  }
+}
 
     // Fitur !all (khusus admin grup) tanpa mention
     if (text.startsWith('!all ') && msg.from.endsWith('@g.us')) {
