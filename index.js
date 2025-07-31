@@ -4,10 +4,10 @@ const path = './users.json';
 
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: { headless: true },
-    qrTimeout: 300000 // 5 menit (dalam milidetik)
-});
+    puppeteer: { args: ['--no-sandbox'] },
+        qrTimeout: 300000 // 5 menit (dalam milidetik)
 
+});
 
 let users = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path)) : [];
 
