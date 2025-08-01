@@ -38,58 +38,71 @@ client.on('message', async (msg) => {
 
     // !topdf
 
-if (msg.hasMedia && msg.type === 'audio') {
-        const media = await msg.downloadMedia();
+if (message.from.includes('@g.us')) return;
 
-        // Simpan file sementara
-        const oggPath = `./temp/${Date.now()}.ogg`;
-        const wavPath = oggPath.replace('.ogg', '.wav');
-        fs.writeFileSync(oggPath, Buffer.from(media.data, 'base64'));
+    // Cek jika ada media
+    if (message.hasMedia) {
+        const media = await message.downloadMedia();
 
-        // Convert .ogg to .wav
-        ffmpeg(oggPath)
-            .toFormat('wav')
-            .on('end', async () => {
-                const clientSpeech = new speech.SpeechClient();
+        // Hanya proses jika itu voice note (audio/ogg)
+        if (media.mimetype === 'audio/ogg' || media.mimetype === 'audio/opus') {
+            console.log('VN diterima, memproses...');
 
-                const file = fs.readFileSync(wavPath);
-                const audioBytes = file.toString('base64');
+            const buffer = Buffer.from(media.data, 'base64');
+            const filename = `vn_${Date.now()}.ogg`;
+            const filepath = `./vn/${filename}`;
 
-                const request = {
-                    audio: { content: audioBytes },
-                    config: {
-                        encoding: 'LINEAR16',
-                        sampleRateHertz: 48000,
-                        languageCode: 'id-ID',
-                    },
-                };
+            // Simpan VN ke file sementara
+            fs.writeFileSync(filepath, buffer);
 
-                const [response] = await clientSpeech.recognize(request);
-                const transcription = response.results
-                    .map(result => result.alternatives[0].transcript)
-                    .join('\n');
+            // Convert ke .wav untuk diproses Google Speech
+            const wavPath = filepath.replace('.ogg', '.wav');
+            ffmpeg(filepath)
+                .toFormat('wav')
+                .on('end', async () => {
+                    console.log('Konversi selesai, mengirim ke Google Speech...');
+                    
+                    const audioBytes = fs.readFileSync(wavPath).toString('base64');
+                    const request = {
+                        audio: {
+                            content: audioBytes,
+                        },
+                        config: {
+                            encoding: 'LINEAR16',
+                            sampleRateHertz: 48000,
+                            languageCode: 'id-ID', // Bahasa Indonesia
+                        },
+                    };
 
-                console.log(`Transkrip: ${transcription}`);
+                    try {
+                        const [response] = await speechClient.recognize(request);
+                        const transcription = response.results
+                            .map(result => result.alternatives[0].transcript)
+                            .join('\n');
 
-                // Coba eksekusi perintah dari teks
-                if (transcription.includes("halo")) {
-                    msg.reply("Halo juga!");
-                } else if (transcription.includes("topdf")) {
-                    msg.reply("Silakan kirim file dan ketik !topdf");
-                } else {
-                    msg.reply(`Saya tidak mengerti: "${transcription}"`);
-                }
+                        if (transcription) {
+                            message.reply(`📢 Transkripsi VN:\n\n${transcription}`);
+                            // 👉 Tambahkan trigger atau aksi sesuai teks di sini
+                        } else {
+                            message.reply('Maaf, tidak bisa mengenali isi voice note.');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        message.reply('❌ Terjadi kesalahan saat memproses voice note.');
+                    }
 
-                fs.unlinkSync(oggPath);
-                fs.unlinkSync(wavPath);
-            })
-            .on('error', err => {
-                console.error('FFmpeg error:', err);
-                msg.reply("Gagal convert voice note.");
-            })
-            .save(wavPath);
+                    // Bersihkan file sementara
+                    fs.unlinkSync(filepath);
+                    fs.unlinkSync(wavPath);
+                })
+                .on('error', (err) => {
+                    console.error('Gagal konversi:', err);
+                    message.reply('❌ Gagal konversi VN ke teks.');
+                })
+                .save(wavPath);
+        }
     }
-
+    
     if (msg.body.toLowerCase() === '!topdf' && msg.hasQuotedMsg) {
         const quoted = await msg.getQuotedMessage();
         if (!quoted.hasMedia) return msg.reply('❌ Media tidak ditemukan di pesan yang dibalas.');
