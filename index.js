@@ -5,6 +5,7 @@ const FormData = require('form-data');
 const path = './users.json';
 const mime = require('mime-types');
 const path = require('path');
+const { PDFDocument } = require('pdf-lib');
 
 
 const client = new Client({
@@ -26,6 +27,48 @@ client.on('ready', () => console.log('✅ Bot siap.'));
 client.on('message', async (msg) => {
     const sender = msg.from;
     const user = users.find(u => u.id === sender);
+
+if (msg.body.toLowerCase() === '!topdf' && msg.hasQuotedMsg) {
+        const quoted = await msg.getQuotedMessage();
+        if (!quoted.hasMedia) return msg.reply('❌ Media tidak ditemukan di pesan yang dibalas.');
+
+        const media = await quoted.downloadMedia();
+        const ext = mime.extension(media.mimetype);
+        const fileName = `./temp/input.${ext}`;
+        const outputPdf = `./temp/output.pdf`;
+
+        // Simpan file asli
+        fs.writeFileSync(fileName, Buffer.from(media.data, 'base64'));
+
+        // Buat PDF dari gambar
+        const pdfDoc = await PDFDocument.create();
+        const imageBytes = fs.readFileSync(fileName);
+        let image, page;
+
+        if (ext === 'jpg' || ext === 'jpeg') {
+            image = await pdfDoc.embedJpg(imageBytes);
+        } else if (ext === 'png') {
+            image = await pdfDoc.embedPng(imageBytes);
+        } else {
+            return msg.reply('❌ Hanya gambar (JPG/PNG) yang didukung untuk sekarang.');
+        }
+
+        const { width, height } = image.scale(1);
+        page = pdfDoc.addPage([width, height]);
+        page.drawImage(image, { x: 0, y: 0, width, height });
+
+        const pdfBytes = await pdfDoc.save();
+        fs.writeFileSync(outputPdf, pdfBytes);
+
+        // Kirim ulang sebagai dokumen PDF
+        const mediaDoc = MessageMedia.fromFilePath(outputPdf);
+        await msg.reply('✅ File berhasil dikonversi ke PDF. Mengirim...');
+        await msg.reply(mediaDoc, msg.from, { sendMediaAsDocument: true });
+
+        // Hapus file temp
+        fs.unlinkSync(fileName);
+        fs.unlinkSync(outputPdf);
+    }
 
     // Catat user baru
     if (!user) {
