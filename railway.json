@@ -1,0 +1,11 @@
+{
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    },
+    "buildCommand": "apt-get update && apt-get install -y ffmpeg && npm install"
+  },
+  "start": {
+    "cmd": "node index.js"
+  }
+}
