@@ -5,6 +5,8 @@ const FormData = require('form-data');
 const mime = require('mime-types');
 const path = require('path'); // Hanya ini untuk module
 const { PDFDocument } = require('pdf-lib');
+const ffmpeg = require('fluent-ffmpeg');
+const speech = require('@google-cloud/speech');
 
 const usersPath = './users.json'; // Ganti nama variabel agar tidak konflik
 
@@ -35,6 +37,59 @@ client.on('message', async (msg) => {
     await delay(3000);
 
     // !topdf
+
+if (msg.hasMedia && msg.type === 'audio') {
+        const media = await msg.downloadMedia();
+
+        // Simpan file sementara
+        const oggPath = `./temp/${Date.now()}.ogg`;
+        const wavPath = oggPath.replace('.ogg', '.wav');
+        fs.writeFileSync(oggPath, Buffer.from(media.data, 'base64'));
+
+        // Convert .ogg to .wav
+        ffmpeg(oggPath)
+            .toFormat('wav')
+            .on('end', async () => {
+                const clientSpeech = new speech.SpeechClient();
+
+                const file = fs.readFileSync(wavPath);
+                const audioBytes = file.toString('base64');
+
+                const request = {
+                    audio: { content: audioBytes },
+                    config: {
+                        encoding: 'LINEAR16',
+                        sampleRateHertz: 48000,
+                        languageCode: 'id-ID',
+                    },
+                };
+
+                const [response] = await clientSpeech.recognize(request);
+                const transcription = response.results
+                    .map(result => result.alternatives[0].transcript)
+                    .join('\n');
+
+                console.log(`Transkrip: ${transcription}`);
+
+                // Coba eksekusi perintah dari teks
+                if (transcription.includes("halo")) {
+                    msg.reply("Halo juga!");
+                } else if (transcription.includes("topdf")) {
+                    msg.reply("Silakan kirim file dan ketik !topdf");
+                } else {
+                    msg.reply(`Saya tidak mengerti: "${transcription}"`);
+                }
+
+                fs.unlinkSync(oggPath);
+                fs.unlinkSync(wavPath);
+            })
+            .on('error', err => {
+                console.error('FFmpeg error:', err);
+                msg.reply("Gagal convert voice note.");
+            })
+            .save(wavPath);
+    }
+
     if (msg.body.toLowerCase() === '!topdf' && msg.hasQuotedMsg) {
         const quoted = await msg.getQuotedMessage();
         if (!quoted.hasMedia) return msg.reply('❌ Media tidak ditemukan di pesan yang dibalas.');
