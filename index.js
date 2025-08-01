@@ -44,79 +44,57 @@ client.on('message', async (msg) => {
   console.log('Has Media:', msg.hasMedia);
 
   if (
-    msg.hasMedia &&
-    (msg.type === 'ptt' || msg.type === 'audio' || msg.mimetype?.includes('ogg') || msg.mimetype?.includes('opus')) &&
-    !msg.from.includes('@g.us')
-  ) {
-    console.log('✅ VN diterima dari chat pribadi, memproses...');
+  msg.hasMedia &&
+  (msg.type === 'audio' || msg.mimetype?.includes('audio/ogg')) &&
+  !msg.from.includes('@g.us')
+) {
+  console.log('✅ VN diterima dari chat pribadi, memproses...');
 
-    try {
-      const media = await msg.downloadMedia();
-
-      if (!media || !media.data) {
-        console.log('⚠️ Media VN tidak ditemukan atau rusak.');
-        return msg.reply('❌ Gagal mengambil data VN.');
-      }
-
-      const buffer = Buffer.from(media.data, 'base64');
-      const dir = './vn';
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-      const filename = `vn_${Date.now()}.ogg`;
-      const filepath = `${dir}/${filename}`;
-      fs.writeFileSync(filepath, buffer);
-
-      const wavPath = filepath.replace('.ogg', '.wav');
-
-      ffmpeg(filepath)
-        .toFormat('wav')
-        .on('end', async () => {
-          console.log('🎙️ Konversi selesai, mengirim ke Google Speech API...');
-
-          const audioBytes = fs.readFileSync(wavPath).toString('base64');
-
-          const request = {
-            audio: { content: audioBytes },
-            config: {
-              encoding: 'LINEAR16',
-              sampleRateHertz: 48000,
-              languageCode: 'id-ID',
-            },
-          };
-
-          try {
-            const [response] = await speechClient.recognize(request);
-            const transcription = response.results
-              .map(result => result.alternatives[0].transcript)
-              .join('\n');
-
-            if (transcription) {
-              await msg.reply(`📢 Transkripsi VN:\n\n${transcription}`);
-            } else {
-              await msg.reply('❗ Tidak bisa mengenali isi voice note.');
-            }
-          } catch (err) {
-            console.error('❌ Speech API error:', err);
-            await msg.reply('❌ Gagal mengenali suara.');
-          }
-
-          fs.unlinkSync(filepath);
-          fs.unlinkSync(wavPath);
-        })
-        .on('error', (err) => {
-          console.error('❌ Gagal konversi:', err);
-          msg.reply('❌ Gagal konversi VN ke teks.');
-        })
-        .save(wavPath);
-
-    } catch (err) {
-      console.error('❌ Error proses VN:', err);
-      await msg.reply('❌ Terjadi kesalahan saat memproses voice note.');
+  try {
+    const media = await msg.downloadMedia();
+    if (!media || !media.data) {
+      return msg.reply('❌ Gagal ambil data VN.');
     }
 
-    return; // stop execution jika ini VN
+    const buffer = Buffer.from(media.data, 'base64');
+    const filename = `vn_${Date.now()}.ogg`;
+    const dir = './vn';
+
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+    const filepath = `${dir}/${filename}`;
+    fs.writeFileSync(filepath, buffer);
+
+    // Kirim ke API siputzx.my.id
+    const form = new FormData();
+    form.append('file', fs.createReadStream(filepath));
+
+    const response = await axios.post(
+      'https://api.siputzx.my.id/api/cf/whisper',
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+        }
+      }
+    );
+
+    const transcription = response.data?.text || null;
+
+    if (transcription) {
+      await msg.reply(`📢 Transkripsi VN:\n\n${transcription}`);
+    } else {
+      await msg.reply('❗ Tidak bisa mengenali isi voice note.');
+    }
+
+    fs.unlinkSync(filepath);
+
+  } catch (err) {
+    console.error('❌ Error transkrip VN:', err);
+    await msg.reply('❌ Terjadi kesalahan saat memproses VN.');
   }
 
+  return;
+}
 
     
     if (msg.body.toLowerCase() === '!topdf' && msg.hasQuotedMsg) {
