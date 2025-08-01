@@ -34,58 +34,29 @@ client.on('message', async (msg) => {
 
     const text = msg.body.trim().toLowerCase();
 
-    if (!msg.body.startsWith('!hd')) return;
+    if (msg.body === '!hd' && msg.hasMedia) {
+    const media = await msg.downloadMedia();
 
-  const quoted = msg.hasQuotedMsg ? await msg.getQuotedMessage() : null;
-
-  if (!quoted || quoted.type !== 'image') {
-    msg.reply('❌ Reply gambar yang ingin di-HD-kan dengan perintah *!hd*');
-    return;
-  }
-
-
-  try {
-    const media = await quoted.downloadMedia();
-
-    const ext = mime.extension(media.mimetype);
-    const buffer = Buffer.from(media.data, 'base64');
-    const filename = `temp_${Date.now()}.${ext}`;
-    fs.writeFileSync(filename, buffer);
-
+    // Upload ke API
     const form = new FormData();
-    form.append('image', fs.createReadStream(filename));
-    form.append('type', '1');
+    form.append('image', Buffer.from(media.data, 'base64'), {
+      filename: 'image.jpg',
+      contentType: media.mimetype
+    });
 
-    const response = await axios.post(
-      'https://api.siputzx.my.id/api/iloveimg/upscale',
-      form,
-      {
-        headers: form.getHeaders(),
-        maxBodyLength: Infinity
-      }
-    );
-
-    fs.unlinkSync(filename); // hapus file lokal setelah dikirim
-
-    if (response.data?.status && response.data.data?.url) {
-      const hdUrl = response.data.data.url;
-      const fileRes = await axios.get(hdUrl, { responseType: 'arraybuffer' });
-
-      const mimeType = response.headers['content-type'] || mime.lookup(hdUrl);
-      const extDoc = mime.extension(mimeType) || 'jpg';
-
-      await client.sendMessage(msg.from, Buffer.from(fileRes.data), {
-        caption: '✅ Berikut hasil gambar HD kamu!',
-        mimetype: mimeType,
-        sendMediaAsDocument: true,
-        filename: `hd.${extDoc}`
+    try {
+      const res = await axios.post('https://api.siputzx.my.id/api/iloveimg/upscale', form, {
+        headers: form.getHeaders()
       });
-    } else {
-      msg.reply('⚠️ Gagal meng-HD-kan gambar. Coba lagi nanti.');
+
+      // Kirim hasil upscale
+      const file = await axios.get(res.data.url, { responseType: 'arraybuffer' });
+      const doc = new MessageMedia('image/jpeg', file.data.toString('base64'), 'hd.jpg');
+
+      msg.reply(doc, undefined, { sendMediaAsDocument: true });
+    } catch (err) {
+      msg.reply('❌ Terjadi kesalahan saat memproses gambar.');
     }
-  } catch (err) {
-    console.error('Error:', err.message);
-    msg.reply('❌ Terjadi kesalahan saat memproses gambar.');
   }
 
 
