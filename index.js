@@ -35,6 +35,8 @@ client.on('qr', (qr) => {
 
 client.on('ready', () => console.log('✅ Bot siap.'));
 
+const sender = msg.from;
+const user = users.find(u => u.id === sender);
 
 client.on('message', async (msg) => {
   console.log('📩 New message received!');
