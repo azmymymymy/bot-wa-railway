@@ -7,6 +7,8 @@ const path = require('path'); // Hanya ini untuk module
 const { PDFDocument } = require('pdf-lib');
 const ffmpeg = require('fluent-ffmpeg');
 const speech = require('@google-cloud/speech');
+const speechClient = new speech.SpeechClient();
+
 
 const usersPath = './users.json'; // Ganti nama variabel agar tidak konflik
 
@@ -29,7 +31,6 @@ client.on('qr', (qr) => {
 
 client.on('ready', () => console.log('✅ Bot siap.'));
 
-const speechClient = new SpeechClient();
 
 client.on('message', async (msg) => {
   console.log('📩 New message received!');
