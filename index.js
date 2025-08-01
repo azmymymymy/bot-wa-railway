@@ -33,18 +33,17 @@ client.on('message', async (msg) => {
     const sender = msg.from;
     const user = users.find(u => u.id === sender);
 
+    // Hanya lanjutkan jika chat pribadi (bukan grup)
+    if (msg.from.includes('@g.us')) return;
+
     // Delay 3 detik sebelum memproses pesan
     await delay(3000);
 
-    // !topdf
-
-if (message.from.includes('@g.us')) return;
-
     // Cek jika ada media
-    if (message.hasMedia) {
-        const media = await message.downloadMedia();
+    if (msg.hasMedia) {
+        const media = await msg.downloadMedia();
 
-        // Hanya proses jika itu voice note (audio/ogg)
+        // Hanya proses jika itu voice note (audio/ogg atau opus)
         if (media.mimetype === 'audio/ogg' || media.mimetype === 'audio/opus') {
             console.log('VN diterima, memproses...');
 
