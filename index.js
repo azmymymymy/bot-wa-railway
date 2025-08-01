@@ -6,9 +6,10 @@ const mime = require('mime-types');
 const path = require('path'); // Hanya ini untuk module
 const { PDFDocument } = require('pdf-lib');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const ffmpeg = require('fluent-ffmpeg');
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+
 const speech = require('@google-cloud/speech');
 const speechClient = new speech.SpeechClient();
 
