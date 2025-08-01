@@ -66,20 +66,35 @@ client.on('message', async (msg) => {
 
     // !all (hanya di grup)
     if (text.startsWith('!all ') && msg.from.endsWith('@g.us')) {
-        const chat = await msg.getChat();
-        if (!chat.isGroup) return;
+    const chat = await msg.getChat();
+    if (!chat.isGroup) return;
 
-        const authorId = msg.author || msg.from;
-        const participants = await chat.participants;
-        const senderData = participants.find(p => p.id._serialized === authorId);
+    const authorId = msg.author || msg.from;
+    const participants = await chat.participants;
+    const senderData = participants.find(p => p.id._serialized === authorId);
 
-        if (!senderData?.isAdmin) {
-            return msg.reply('❌ Hanya admin yang boleh menggunakan perintah ini.');
-        }
-
-        const teks = msg.body.slice(5).trim();
-        return chat.sendMessage(teks);
+    if (!senderData?.isAdmin) {
+        return msg.reply('❌ Hanya admin yang boleh menggunakan perintah ini.');
     }
+
+    const teks = msg.body.slice(5).trim();
+    if (!teks) {
+        return msg.reply('❌ Format: !all [pesan]');
+    }
+
+    try {
+        const mentions = participants.map(participant => participant.id._serialized);
+        
+        await chat.sendMessage(teks, {
+            mentions: mentions
+        });
+
+        await msg.delete(true);
+    } catch (error) {
+        console.error('Hidetag error:', error);
+        msg.reply('❌ Gagal mengirim hidetag.');
+    }
+}
 
     // !brat
     if (text.startsWith('!brat ')) {
