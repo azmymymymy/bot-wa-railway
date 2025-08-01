@@ -35,8 +35,7 @@ client.on('qr', (qr) => {
 
 client.on('ready', () => console.log('✅ Bot siap.'));
 
-const sender = msg.from;
-const user = users.find(u => u.id === sender);
+
 
 client.on('message', async (msg) => {
   console.log('📩 New message received!');
@@ -44,6 +43,9 @@ client.on('message', async (msg) => {
   console.log('MIME:', msg.mimetype);
   console.log('From:', msg.from);
   console.log('Has Media:', msg.hasMedia);
+
+  const sender = msg.from;
+const user = users.find(u => u.id === sender);
 
   if (
   msg.hasMedia &&
