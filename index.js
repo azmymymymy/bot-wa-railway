@@ -34,6 +34,61 @@ client.on('message', async (msg) => {
 
     const text = msg.body.trim().toLowerCase();
 
+    if (!msg.body.startsWith('!hd')) return;
+
+  const quoted = msg.hasQuotedMsg ? await msg.getQuotedMessage() : null;
+
+  if (!quoted || quoted.type !== 'image') {
+    msg.reply('❌ Reply gambar yang ingin di-HD-kan dengan perintah *!hd*');
+    return;
+  }
+
+
+  try {
+    const media = await quoted.downloadMedia();
+
+    const ext = mime.extension(media.mimetype);
+    const buffer = Buffer.from(media.data, 'base64');
+    const filename = `temp_${Date.now()}.${ext}`;
+    fs.writeFileSync(filename, buffer);
+
+    const form = new FormData();
+    form.append('image', fs.createReadStream(filename));
+    form.append('type', '1');
+
+    const response = await axios.post(
+      'https://api.siputzx.my.id/api/iloveimg/upscale',
+      form,
+      {
+        headers: form.getHeaders(),
+        maxBodyLength: Infinity
+      }
+    );
+
+    fs.unlinkSync(filename); // hapus file lokal setelah dikirim
+
+    if (response.data?.status && response.data.data?.url) {
+      const hdUrl = response.data.data.url;
+      const fileRes = await axios.get(hdUrl, { responseType: 'arraybuffer' });
+
+      const mimeType = response.headers['content-type'] || mime.lookup(hdUrl);
+      const extDoc = mime.extension(mimeType) || 'jpg';
+
+      await client.sendMessage(msg.from, Buffer.from(fileRes.data), {
+        caption: '✅ Berikut hasil gambar HD kamu!',
+        mimetype: mimeType,
+        sendMediaAsDocument: true,
+        filename: `hd.${extDoc}`
+      });
+    } else {
+      msg.reply('⚠️ Gagal meng-HD-kan gambar. Coba lagi nanti.');
+    }
+  } catch (err) {
+    console.error('Error:', err.message);
+    msg.reply('❌ Terjadi kesalahan saat memproses gambar.');
+  }
+
+
     // !menu
     if (text === '!menu') {
         return msg.reply('📋 Menu:\n1. !ping\n2. !info\n3. !ask <pertanyaan>\n4. !brat <teks>\n5. !removebg (dengan gambar)');
