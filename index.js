@@ -34,28 +34,39 @@ client.on('message', async (msg) => {
 
     const text = msg.body.trim().toLowerCase();
 
-    if (msg.body === '!hd' && msg.hasMedia) {
-    const media = await msg.downloadMedia();
+    if (msg.body === '!hd' && msg.hasQuotedMsg) {
+    const quotedMsg = await msg.getQuotedMessage();
 
-    // Upload ke API
-    const form = new FormData();
-    form.append('image', Buffer.from(media.data, 'base64'), {
-      filename: 'image.jpg',
-      contentType: media.mimetype
-    });
+    if (quotedMsg.hasMedia) {
+      msg.reply('⏳ Sedang memproses gambar HD...');
 
-    try {
-      const res = await axios.post('https://api.siputzx.my.id/api/iloveimg/upscale', form, {
-        headers: form.getHeaders()
+      const media = await quotedMsg.downloadMedia();
+
+      const buffer = Buffer.from(media.data, 'base64');
+      const formData = new FormData();
+      formData.append('image', buffer, {
+        filename: 'image.jpg',
+        contentType: media.mimetype
       });
 
-      // Kirim hasil upscale
-      const file = await axios.get(res.data.url, { responseType: 'arraybuffer' });
-      const doc = new MessageMedia('image/jpeg', file.data.toString('base64'), 'hd.jpg');
+      try {
+        const response = await axios.post('https://api.siputzx.my.id/api/iloveimg/upscale', formData, {
+          headers: {
+            ...formData.getHeaders()
+          },
+          responseType: 'arraybuffer'
+        });
 
-      msg.reply(doc, undefined, { sendMediaAsDocument: true });
-    } catch (err) {
-      msg.reply('❌ Terjadi kesalahan saat memproses gambar.');
+        const hdBuffer = Buffer.from(response.data, 'binary');
+        const mediaDoc = new MessageMedia('image/jpeg', hdBuffer.toString('base64'), 'HD.jpg');
+
+        await client.sendMessage(msg.from, mediaDoc, { sendMediaAsDocument: true });
+      } catch (err) {
+        console.error(err);
+        msg.reply('❌ Terjadi kesalahan saat memproses gambar.');
+      }
+    } else {
+      msg.reply('❌ Balas gambar yang ingin di-HD-kan dengan command `!hd`.');
     }
   }
 
