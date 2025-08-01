@@ -3,6 +3,9 @@ const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 const path = './users.json';
+const mime = require('mime-types');
+const path = require('path');
+
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -34,41 +37,43 @@ client.on('message', async (msg) => {
 
     const text = msg.body.trim().toLowerCase();
 
-    if (msg.body === '!hd' && msg.hasQuotedMsg) {
-    const quotedMsg = await msg.getQuotedMessage();
+    if (message.body === '!hd' && message.hasMedia) {
+        try {
+            const media = await message.downloadMedia();
+            const buffer = Buffer.from(media.data, 'base64');
+            const extension = mime.extension(media.mimetype);
+            const tempPath = `temp_${Date.now()}.${extension}`;
+            fs.writeFileSync(tempPath, buffer);
 
-    if (quotedMsg.hasMedia) {
-      msg.reply('⏳ Sedang memproses gambar HD...');
+            // Kirim ke API iloveimg
+            const formData = new FormData();
+            formData.append('image', fs.createReadStream(tempPath));
 
-      const media = await quotedMsg.downloadMedia();
+            const res = await axios.post('https://api.siputzx.my.id/api/iloveimg/upscale', formData, {
+                headers: {
+                    ...formData.getHeaders(),
+                },
+                responseType: 'arraybuffer'
+            });
 
-      const buffer = Buffer.from(media.data, 'base64');
-      const formData = new FormData();
-      formData.append('image', buffer, {
-        filename: 'image.jpg',
-        contentType: media.mimetype
-      });
+            const outputPath = `HD_${Date.now()}.jpg`;
+            fs.writeFileSync(outputPath, res.data);
 
-      try {
-        const response = await axios.post('https://api.siputzx.my.id/api/iloveimg/upscale', formData, {
-          headers: {
-            ...formData.getHeaders()
-          },
-          responseType: 'arraybuffer'
-        });
+            // Kirim ulang sebagai dokumen
+            const hdMedia = MessageMedia.fromFilePath(outputPath);
+            await message.reply(hdMedia, message.from, {
+                sendMediaAsDocument: true
+            });
 
-        const hdBuffer = Buffer.from(response.data, 'binary');
-        const mediaDoc = new MessageMedia('image/jpeg', hdBuffer.toString('base64'), 'HD.jpg');
+            // Bersihkan file sementara
+            fs.unlinkSync(tempPath);
+            fs.unlinkSync(outputPath);
 
-        await client.sendMessage(msg.from, mediaDoc, { sendMediaAsDocument: true });
-      } catch (err) {
-        console.error(err);
-        msg.reply('❌ Terjadi kesalahan saat memproses gambar.');
-      }
-    } else {
-      msg.reply('❌ Balas gambar yang ingin di-HD-kan dengan command `!hd`.');
+        } catch (err) {
+            console.error('Gagal proses HD:', err.message);
+            await message.reply('Gagal meningkatkan kualitas gambar.');
+        }
     }
-  }
 
 
     // !menu
