@@ -16,6 +16,9 @@ const client = new Client({
 
 let users = fs.existsSync(usersPath) ? JSON.parse(fs.readFileSync(usersPath)) : [];
 
+// Fungsi delay 3 detik
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 client.on('qr', (qr) => {
     console.log('⬇⬇⬇ QR CODE STRING ⬇⬇⬇');
     console.log(qr);
@@ -27,6 +30,9 @@ client.on('ready', () => console.log('✅ Bot siap.'));
 client.on('message', async (msg) => {
     const sender = msg.from;
     const user = users.find(u => u.id === sender);
+
+    // Delay 3 detik sebelum memproses pesan
+    await delay(3000);
 
     // !topdf
     if (msg.body.toLowerCase() === '!topdf' && msg.hasQuotedMsg) {
