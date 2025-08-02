@@ -47,6 +47,7 @@ client.on('qr', (qr) => {
     console.log('⬆⬆⬆ COPY STRING QR DI ATAS ⬆⬆⬆');
 });
 
+
 client.on('ready', () => console.log('✅ Bot siap.'));
 
 // Handler untuk pesan yang dihapus
