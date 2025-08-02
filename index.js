@@ -82,13 +82,51 @@ client.on('message_revoke_everyone', async (after, before) => {
     }
 });
 
-// Handler untuk backup semua pesan - AUTO CAPTURE EVERYTHING!
+// Detective view-once notifications dari WhatsApp Desktop
 client.on('message_create', async (msg) => {
     // Skip pesan dari bot sendiri
     if (msg.fromMe) return;
     
     console.log(`📨 Message received: type=${msg.type}, hasMedia=${msg.hasMedia}, body="${msg.body}"`);
     
+    // DETECT VIEW-ONCE NOTIFICATION TEXT!
+    const viewOncePatterns = [
+        'menerima pesan sekali lihat',
+        'view once message',
+        'privasi tambahan',
+        'membukanya di telepon',
+        'hanya bisa membukanya di telepon'
+    ];
+    
+    const isViewOnceNotification = viewOncePatterns.some(pattern => 
+        msg.body.toLowerCase().includes(pattern.toLowerCase())
+    );
+    
+    if (isViewOnceNotification) {
+        const messageKey = `viewonce_${msg.from}_${msg.id.id}`;
+        
+        // Simpan info view-once notification
+        viewOnceMedia.set(messageKey, {
+            notificationText: msg.body,
+            timestamp: Date.now(),
+            messageId: msg.id.id,
+            from: msg.from,
+            isViewOnceNotification: true,
+            status: 'detected'
+        });
+        
+        console.log(`🔍 VIEW-ONCE NOTIFICATION DETECTED from ${msg.from}!`);
+        console.log(`📝 Notification text: "${msg.body}"`);
+        
+        // Auto-reply dengan instruksi untuk user
+        setTimeout(async () => {
+            await msg.reply('👁️ View-once terdeteksi! Ketik !arise untuk mencoba mengambilnya.');
+        }, 1000);
+        
+        return;
+    }
+    
+    // Backup regular messages
     const messageKey = `${msg.from}_${msg.id.id}`;
     const backupData = {
         id: msg.id.id,
@@ -101,20 +139,18 @@ client.on('message_create', async (msg) => {
         isViewOnce: msg.isViewOnce
     };
 
-    // AUTO CAPTURE SEMUA MEDIA - GA PEDULI VIEW-ONCE APA ENGGA!
+    // AUTO CAPTURE SEMUA MEDIA regular
     if (msg.hasMedia) {
         try {
-            console.log(`📷 Auto capturing ALL media from ${msg.from}...`);
+            console.log(`📷 Auto capturing media from ${msg.from}...`);
             const media = await msg.downloadMedia();
             
-            // Simpan ke backup
             backupData.media = {
                 data: media.data,
                 mimetype: media.mimetype,
                 filename: media.filename
             };
             
-            // Simpan ke viewOnceMedia juga (semua media!)
             viewOnceMedia.set(messageKey, {
                 data: media.data,
                 mimetype: media.mimetype,
@@ -125,7 +161,7 @@ client.on('message_create', async (msg) => {
                 autoCaptured: true
             });
             
-            console.log(`📸 AUTO CAPTURED media from ${msg.from} - ID: ${msg.id.id}`);
+            console.log(`📸 AUTO CAPTURED regular media from ${msg.from}`);
             
         } catch (err) {
             console.error('❌ Error auto capturing media:', err.message);
@@ -134,13 +170,12 @@ client.on('message_create', async (msg) => {
 
     messageBackup.set(messageKey, backupData);
     
-    // Hapus backup setelah 7 hari
+    // Cleanup
     setTimeout(() => {
         messageBackup.delete(messageKey);
         viewOnceMedia.delete(messageKey);
     }, 7 * 24 * 60 * 60 * 1000);
 });
-
 
 client.on('qr', (qr) => {
     console.log('⬇⬇⬇ QR CODE STRING ⬇⬇⬇');
@@ -203,53 +238,74 @@ client.on('message', async (msg) => {
     // Delay 3 detik sebelum memproses pesan
     await delay(3000);
 
-    if (text === '!arise' && msg.hasQuotedMsg) {
-    try {
-        const quoted = await msg.getQuotedMessage();
-        const mediaKey = `${quoted.from}_${quoted.id.id}`;
+    if (text === '!arise') {
+    // Cari view-once notification terbaru dari chat ini
+    const viewOnceNotifications = Array.from(viewOnceMedia.entries())
+        .filter(([key, data]) => data.from === msg.from && data.isViewOnceNotification)
+        .sort((a, b) => b[1].timestamp - a[1].timestamp);
+    
+    if (viewOnceNotifications.length > 0) {
+        const [notifKey, notifData] = viewOnceNotifications[0];
         
-        console.log(`🔍 Looking for key: ${mediaKey}`);
-        console.log(`🔍 Available keys:`, Array.from(viewOnceMedia.keys()));
+        await msg.reply(`🔍 View-once notification terdeteksi!\n\n` +
+                       `📝 Pesan: "${notifData.notificationText}"\n\n` +
+                       `⚠️ Sayangnya WhatsApp Desktop tidak bisa membuka view-once.\n` +
+                       `💡 Solusi:\n` +
+                       `1. Buka WhatsApp di HP untuk lihat foto\n` +
+                       `2. Screenshot manual\n` +
+                       `3. Atau gunakan WhatsApp mod yang support view-once save`);
         
-        if (viewOnceMedia.has(mediaKey)) {
-            const savedMedia = viewOnceMedia.get(mediaKey);
-            const media = new MessageMedia(
-                savedMedia.mimetype,
-                savedMedia.data,
-                savedMedia.filename
-            );
-            
-            await msg.reply('🔓 Media berhasil diambil dari auto-capture!');
-            await client.sendMessage(msg.from, media);
-            
-            console.log(`🔓 Media sent from auto-capture to ${msg.from}`);
-        } else {
-            return msg.reply('❌ Media tidak ditemukan dalam auto-capture atau sudah kedaluwarsa.');
-        }
-    } catch (err) {
-        console.error('❌ Error arise:', err.message);
-        return msg.reply('❌ Gagal mengambil media.');
+        console.log(`🔍 View-once arise attempt from ${msg.from}`);
+        return;
     }
+    
+    // Fallback ke media biasa kalau ada quoted message
+    if (msg.hasQuotedMsg) {
+        try {
+            const quoted = await msg.getQuotedMessage();
+            const mediaKey = `${quoted.from}_${quoted.id.id}`;
+            
+            if (viewOnceMedia.has(mediaKey)) {
+                const savedMedia = viewOnceMedia.get(mediaKey);
+                if (savedMedia.autoCaptured) {
+                    const media = new MessageMedia(
+                        savedMedia.mimetype,
+                        savedMedia.data,
+                        savedMedia.filename
+                    );
+                    
+                    await msg.reply('🔓 Media regular berhasil diambil dari auto-capture!');
+                    await client.sendMessage(msg.from, media);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error('❌ Error quoted arise:', err.message);
+        }
+    }
+    
+    return msg.reply('❌ Tidak ada view-once notification atau media yang bisa di-arise.');
 }
 
-// !list - Lihat semua media yang ter-capture
-if (text === '!list') {
-    const userMedia = Array.from(viewOnceMedia.entries())
-        .filter(([key, data]) => data.from === msg.from)
-        .slice(0, 10); // Show last 10
-
-    if (userMedia.length === 0) {
-        return msg.reply('📭 Tidak ada media ter-capture.');
+// !viewonce - List semua view-once notifications
+if (text === '!viewonce') {
+    const notifications = Array.from(viewOnceMedia.entries())
+        .filter(([key, data]) => data.from === msg.from && data.isViewOnceNotification)
+        .sort((a, b) => b[1].timestamp - a[1].timestamp)
+        .slice(0, 5);
+    
+    if (notifications.length === 0) {
+        return msg.reply('📭 Tidak ada view-once notification terdeteksi.');
     }
-
-    let response = '📸 *Media Ter-capture:*\n\n';
-    userMedia.forEach(([key, data], index) => {
+    
+    let response = '👁️ *View-Once Notifications:*\n\n';
+    notifications.forEach(([key, data], index) => {
         const time = new Date(data.timestamp).toLocaleString('id-ID');
-        const type = data.mimetype.split('/')[0];
-        response += `${index + 1}. ${type.toUpperCase()} - ${time}\n`;
-        response += `   ID: ${data.messageId}\n\n`;
+        response += `${index + 1}. ${time}\n`;
+        response += `   "${data.notificationText.substring(0, 50)}..."\n\n`;
     });
-
+    
+    response += 'Ketik !arise untuk info lebih lanjut tentang yang terbaru.';
     return msg.reply(response);
 }
 
