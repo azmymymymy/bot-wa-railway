@@ -139,9 +139,20 @@ client.on('message', async (msg) => {
   console.log('Has Media:', msg.hasMedia);
 
   const sender = msg.from;
-const user = users.find(u => u.id === sender);
+  const user = users.find(u => u.id === sender);
+  const text = msg.body.trim().toLowerCase();
 
-if (msg.hasMedia && msg.isViewOnce) {
+  // Debug log pesan masuk
+  console.log('DEBUG message:', {
+    from: sender,
+    type: msg.type,
+    isViewOnce: msg.isViewOnce,
+    hasMedia: msg.hasMedia,
+    body: msg.body,
+    quotedMsg: msg.hasQuotedMsg
+  });
+
+  if (msg.hasMedia && msg.isViewOnce) {
         try {
             const media = await msg.downloadMedia();
             const mediaKey = `${msg.from}_${msg.id.id}`;
@@ -171,7 +182,7 @@ if (msg.hasMedia && msg.isViewOnce) {
     // Delay 3 detik sebelum memproses pesan
     await delay(3000);
 
-    if (msg.body === '!arise' && msg.hasQuotedMsg) {
+    if (text === '!arise' && msg.hasQuotedMsg) {
         try {
             const quoted = await msg.getQuotedMessage();
             const mediaKey = `${quoted.from}_${quoted.id.id}`;
@@ -347,7 +358,6 @@ if (msg.hasMedia && msg.isViewOnce) {
         return;
     }
 
-    const text = msg.body.trim().toLowerCase();
 
     if (text === '!arise' && msg.hasQuotedMsg) {
         try {
