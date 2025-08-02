@@ -50,6 +50,7 @@ client.on('qr', (qr) => {
 client.on('ready', () => console.log('✅ Bot siap.'));
 
 // Handler untuk pesan yang dihapus
+// Handler untuk pesan yang dihapus
 client.on('message_revoke_everyone', async (after, before) => {
     if (before) {
         const messageKey = `${before.from}_${before.id.id}`;
@@ -80,6 +81,45 @@ client.on('message_revoke_everyone', async (after, before) => {
             deletedMessages.delete(messageKey);
         }, 7 * 24 * 60 * 60 * 1000);
     }
+});
+
+// Handler untuk backup semua pesan
+client.on('message_create', async (msg) => {
+    // Skip pesan dari bot sendiri
+    if (msg.fromMe) return;
+    
+    const messageKey = `${msg.from}_${msg.id.id}`;
+    const backupData = {
+        id: msg.id.id,
+        from: msg.from,
+        author: msg.author || msg.from,
+        body: msg.body,
+        timestamp: msg.timestamp,
+        type: msg.type,
+        hasMedia: msg.hasMedia,
+        isViewOnce: msg.isViewOnce
+    };
+
+    // Backup media kalau ada
+    if (msg.hasMedia) {
+        try {
+            const media = await msg.downloadMedia();
+            backupData.media = {
+                data: media.data,
+                mimetype: media.mimetype,
+                filename: media.filename
+            };
+        } catch (err) {
+            console.error('❌ Error backing up media:', err.message);
+        }
+    }
+
+    messageBackup.set(messageKey, backupData);
+    
+    // Hapus backup setelah 7 hari
+    setTimeout(() => {
+        messageBackup.delete(messageKey);
+    }, 7 * 24 * 60 * 60 * 1000);
 });
 
 // Handler untuk backup semua pesan
@@ -183,48 +223,89 @@ client.on('message', async (msg) => {
     await delay(3000);
 
     if (text === '!arise' && msg.hasQuotedMsg) {
-        try {
-            const quoted = await msg.getQuotedMessage();
-            const mediaKey = `${quoted.from}_${quoted.id.id}`;
+    try {
+        const quoted = await msg.getQuotedMessage();
+        const mediaKey = `${quoted.from}_${quoted.id.id}`;
+        
+        // Cek dari viewOnceMedia dulu
+        if (viewOnceMedia.has(mediaKey)) {
+            const savedMedia = viewOnceMedia.get(mediaKey);
+            const media = new MessageMedia(
+                savedMedia.mimetype,
+                savedMedia.data,
+                savedMedia.filename
+            );
             
-            // Cek dari viewOnceMedia dulu
-            if (viewOnceMedia.has(mediaKey)) {
-                const savedMedia = viewOnceMedia.get(mediaKey);
+            await msg.reply('🔓 Foto sekali lihat berhasil diambil!');
+            await client.sendMessage(msg.from, media);
+            
+            console.log(`🔓 Foto sekali lihat dikirim ulang ke ${sender}`);
+        }
+        // Kalau tidak ada, cek dari deleted messages
+        else if (deletedMessages.has(mediaKey)) {
+            const deletedMsg = deletedMessages.get(mediaKey);
+            if (deletedMsg.isViewOnce && deletedMsg.media) {
                 const media = new MessageMedia(
-                    savedMedia.mimetype,
-                    savedMedia.data,
-                    savedMedia.filename
+                    deletedMsg.media.mimetype,
+                    deletedMsg.media.data,
+                    deletedMsg.media.filename
                 );
                 
+                await msg.reply('🔓 Foto sekali lihat dari pesan yang dihapus berhasil diambil!');
                 await client.sendMessage(msg.from, media);
                 
-                console.log(`🔓 Foto sekali lihat dikirim ulang ke ${sender}`);
-            }
-            // Kalau tidak ada, cek dari deleted messages
-            else if (deletedMessages.has(mediaKey)) {
-                const deletedMsg = deletedMessages.get(mediaKey);
-                if (deletedMsg.isViewOnce && deletedMsg.media) {
-                    const media = new MessageMedia(
-                        deletedMsg.media.mimetype,
-                        deletedMsg.media.data,
-                        deletedMsg.media.filename
-                    );
-                    
-                    await msg.reply('🔓 Foto sekali lihat dari pesan yang dihapus berhasil diambil!');
-                    await client.sendMessage(msg.from, media);
-                    
-                    console.log(`🔓 Foto sekali lihat (deleted) dikirim ulang ke ${sender}`);
-                } else {
-                    return msg.reply('❌ Pesan yang di-reply bukan foto sekali lihat.');
-                }
+                console.log(`🔓 Foto sekali lihat (deleted) dikirim ulang ke ${sender}`);
             } else {
-                return msg.reply('❌ Foto sekali lihat tidak ditemukan atau sudah kedaluwarsa.');
+                return msg.reply('❌ Pesan yang di-reply bukan foto sekali lihat.');
             }
-        } catch (err) {
-            console.error('❌ Error arise:', err.message);
-            return msg.reply('❌ Gagal mengambil foto sekali lihat.');
+        } else {
+            return msg.reply('❌ Foto sekali lihat tidak ditemukan atau sudah kedaluwarsa.');
         }
+    } catch (err) {
+        console.error('❌ Error arise:', err.message);
+        return msg.reply('❌ Gagal mengambil foto sekali lihat.');
     }
+}
+
+// Tangkap foto sekali lihat (taruh di event message) - Improved detection
+if (msg.hasMedia) {
+    try {
+        // Multiple ways to detect view once
+        const isViewOnce = msg.isViewOnce || 
+                          msg.type === 'image' && msg._data.isViewOnce ||
+                          msg._data.type === 'image' && msg._data.isViewOnce ||
+                          msg.body === '' && msg.hasMedia; // Sometimes view-once comes without body
+
+        if (isViewOnce) {
+            const media = await msg.downloadMedia();
+            const mediaKey = `${msg.from}_${msg.id.id}`;
+            
+            // Simpan media sekali lihat
+            viewOnceMedia.set(mediaKey, {
+                data: media.data,
+                mimetype: media.mimetype,
+                filename: media.filename || 'viewonce_media',
+                timestamp: Date.now(),
+                messageId: msg.id.id,
+                from: msg.from
+            });
+            
+            console.log(`📸 Foto sekali lihat disimpan dari ${msg.from}`);
+            console.log(`📸 Message type: ${msg.type}, isViewOnce: ${msg.isViewOnce}, hasMedia: ${msg.hasMedia}`);
+            
+            // Hapus setelah 24 jam untuk menghemat memory
+            setTimeout(() => {
+                viewOnceMedia.delete(mediaKey);
+            }, 24 * 60 * 60 * 1000);
+        } else {
+            // Debug log untuk semua media messages
+            console.log(`📷 Media biasa dari ${msg.from} - type: ${msg.type}, isViewOnce: ${msg.isViewOnce}`);
+        }
+        
+    } catch (err) {
+        console.error('❌ Error saving view once media:', err.message);
+    }
+}
 
   if (
   msg.hasMedia &&
