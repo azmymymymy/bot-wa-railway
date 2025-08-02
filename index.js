@@ -190,6 +190,24 @@ client.on('ready', () => console.log('✅ Bot siap.'));
 
 
 client.on('message', async (msg) => {
+
+     const pengirim = msg.from.includes('@g.us') ? msg.author : msg.from;
+  const chat = await msg.getChat();
+
+  // Siapkan notifikasi
+  const keluarannya = msg.body
+    ? `@${pang(partPengirim)} mengirim *View‑Once media*: _${msg.body}_`
+    : `@${pang(pengirim)} mengirim View‑Once media`;
+
+  await chat.sendMessage(
+    keluarannya,
+    {
+      quotedMessageId: msg.id._serialized,
+      mentionedJid: [pengirim]
+    }
+  );
+  console.log(`👁️ View‑Once diterima dari ${pengirim}`);
+
   console.log('📩 New message received!');
   console.log('Type:', msg.type);
   console.log('MIME:', msg.mimetype);
