@@ -96,6 +96,8 @@ client.on('message_create', async (msg) => {
         'privasi tambahan',
         'membukanya di telepon',
         'hanya bisa membukanya di telepon'
+        ,'you can only open it on your phone',
+        'privacy'
     ];
     
     const isViewOnceNotification = viewOncePatterns.some(pattern => 
