@@ -185,27 +185,25 @@ const user = users.find(u => u.id === sender);
     // Fitur !arise untuk foto sekali lihat
     if (text === '!arise' && msg.hasQuotedMsg) {
         const quoted = await msg.getQuotedMessage();
-        console.log('DEBUG quoted:', {
-            type: quoted.type,
-            isViewOnce: quoted.isViewOnce,
-            hasMedia: quoted.hasMedia,
-            mimetype: quoted.mimetype
-        });
-        // Toleransi: jika type image dan (isViewOnce true atau tidak ada caption)
-        if (quoted.type === 'image' && (quoted.isViewOnce === true || quoted.isViewOnce === undefined)) {
+        console.log('DEBUG quoted FULL:', quoted);
+        // Proses semua gambar yang di-reply
+        if (quoted.type === 'image' && quoted.hasMedia) {
             try {
                 const media = await quoted.downloadMedia();
-                if (!media || !media.data) return msg.reply('❌ Gagal mengambil foto sekali lihat.');
+                if (!media || !media.data) {
+                    await msg.reply('❌ Gagal mengambil media. Kemungkinan gambar sudah expired atau bukan foto sekali lihat.');
+                    return;
+                }
                 // Kirim ulang sebagai gambar biasa
                 const image = new MessageMedia(media.mimetype, media.data, 'arise.jpg');
                 await client.sendMessage(msg.from, image, { sendMediaAsDocument: true });
-                await msg.reply('✅ Foto sekali lihat berhasil di-arise!');
+                await msg.reply('✅ Foto berhasil di-arise!');
             } catch (err) {
                 console.error('❌ Error arise:', err);
-                await msg.reply('❌ Gagal arise foto sekali lihat.');
+                await msg.reply('❌ Gagal arise foto.');
             }
         } else {
-            await msg.reply('❌ Pastikan reply ke foto sekali lihat (bukan gambar biasa).');
+            await msg.reply('❌ Reply ke foto sekali lihat (View Once) yang masih aktif. Jika tetap gagal, kirim log terminal ke developer.');
         }
         return;
     }
