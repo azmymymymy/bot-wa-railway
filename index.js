@@ -171,7 +171,7 @@ if (msg.hasMedia && msg.isViewOnce) {
     // Delay 3 detik sebelum memproses pesan
     await delay(3000);
 
-    if (text === '!arise' && msg.hasQuotedMsg) {
+    if (msg.body === '!arise' && msg.hasQuotedMsg) {
         try {
             const quoted = await msg.getQuotedMessage();
             const mediaKey = `${quoted.from}_${quoted.id.id}`;
