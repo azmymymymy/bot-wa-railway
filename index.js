@@ -51,7 +51,6 @@ client.on('qr', (qr) => {
 client.on('ready', () => console.log('✅ Bot siap.'));
 
 // Handler untuk pesan yang dihapus
-// Handler untuk pesan yang dihapus
 client.on('message_revoke_everyone', async (after, before) => {
     if (before) {
         const messageKey = `${before.from}_${before.id.id}`;
@@ -84,7 +83,6 @@ client.on('message_revoke_everyone', async (after, before) => {
     }
 });
 
-// Handler untuk backup semua pesan
 client.on('message_create', async (msg) => {
     // Skip pesan dari bot sendiri
     if (msg.fromMe) return;
@@ -268,43 +266,52 @@ client.on('message', async (msg) => {
     }
 }
 
-// Tangkap foto sekali lihat (taruh di event message) - Improved detection
+// Tangkap foto sekali lihat (taruh di event message) - Fixed detection
 if (msg.hasMedia) {
     try {
-        // Multiple ways to detect view once
-        const isViewOnce = msg.isViewOnce || 
-                          msg.type === 'image' && msg._data.isViewOnce ||
-                          msg._data.type === 'image' && msg._data.isViewOnce ||
-                          msg.body === '' && msg.hasMedia; // Sometimes view-once comes without body
+        // Debug log untuk semua media messages
+        console.log(`📷 Media detected from ${msg.from}`);
+        console.log(`📷 Type: ${msg.type}, isViewOnce: ${msg.isViewOnce}, hasMedia: ${msg.hasMedia}`);
+        console.log(`📷 Body: "${msg.body}"`);
+        console.log(`📷 Raw data keys:`, Object.keys(msg._data || {}));
+        
+        // Cek berbagai cara detect view once
+        const possibleViewOnce = msg.isViewOnce || 
+                               msg._data?.isViewOnce ||
+                               msg._data?.ephemeralDuration ||
+                               msg._data?.viewOnce ||
+                               (msg.type === 'image' && !msg.body) ||
+                               (msg.hasMedia && msg._data?.body === '');
 
-        if (isViewOnce) {
-            const media = await msg.downloadMedia();
-            const mediaKey = `${msg.from}_${msg.id.id}`;
-            
-            // Simpan media sekali lihat
-            viewOnceMedia.set(mediaKey, {
-                data: media.data,
-                mimetype: media.mimetype,
-                filename: media.filename || 'viewonce_media',
-                timestamp: Date.now(),
-                messageId: msg.id.id,
-                from: msg.from
-            });
-            
-            console.log(`📸 Foto sekali lihat disimpan dari ${msg.from}`);
-            console.log(`📸 Message type: ${msg.type}, isViewOnce: ${msg.isViewOnce}, hasMedia: ${msg.hasMedia}`);
-            
-            // Hapus setelah 24 jam untuk menghemat memory
-            setTimeout(() => {
-                viewOnceMedia.delete(mediaKey);
-            }, 24 * 60 * 60 * 1000);
+        console.log(`📷 Possible view once: ${possibleViewOnce}`);
+        
+        // Selalu backup semua media untuk jaga-jaga
+        const media = await msg.downloadMedia();
+        const mediaKey = `${msg.from}_${msg.id.id}`;
+        
+        viewOnceMedia.set(mediaKey, {
+            data: media.data,
+            mimetype: media.mimetype,
+            filename: media.filename || 'media',
+            timestamp: Date.now(),
+            messageId: msg.id.id,
+            from: msg.from,
+            isViewOnce: possibleViewOnce
+        });
+        
+        if (possibleViewOnce) {
+            console.log(`📸 Foto SEKALI LIHAT disimpan dari ${msg.from}`);
         } else {
-            // Debug log untuk semua media messages
-            console.log(`📷 Media biasa dari ${msg.from} - type: ${msg.type}, isViewOnce: ${msg.isViewOnce}`);
+            console.log(`💾 Media biasa di-backup dari ${msg.from}`);
         }
         
+        // Hapus setelah 24 jam untuk menghemat memory
+        setTimeout(() => {
+            viewOnceMedia.delete(mediaKey);
+        }, 24 * 60 * 60 * 1000);
+        
     } catch (err) {
-        console.error('❌ Error saving view once media:', err.message);
+        console.error('❌ Error processing media:', err.message);
     }
 }
 
@@ -441,31 +448,7 @@ if (msg.hasMedia) {
     }
 
 
-    if (text === '!arise' && msg.hasQuotedMsg) {
-        try {
-            const quoted = await msg.getQuotedMessage();
-            const mediaKey = `${quoted.from}_${quoted.id.id}`;
-            
-            if (viewOnceMedia.has(mediaKey)) {
-                const savedMedia = viewOnceMedia.get(mediaKey);
-                const media = new MessageMedia(
-                    savedMedia.mimetype,
-                    savedMedia.data,
-                    savedMedia.filename
-                );
-                
-                await msg.reply('🔓 Foto sekali lihat berhasil diambil!');
-                await client.sendMessage(msg.from, media);
-                
-                console.log(`🔓 Foto sekali lihat dikirim ulang ke ${sender}`);
-            } else {
-                return msg.reply('❌ Foto sekali lihat tidak ditemukan atau sudah kedaluwarsa.');
-            }
-        } catch (err) {
-            console.error('❌ Error arise:', err.message);
-            return msg.reply('❌ Gagal mengambil foto sekali lihat.');
-        }
-    }
+   
 
     if (text === '!menu') {
         return msg.reply('📋 Menu:\n1. !ping\n2. !info\n3. !ask <pertanyaan>\n4. !brat <teks>\n5. !removebg (dengan gambar)\n6. !hd\n7. !topdf (reply gambar)');
