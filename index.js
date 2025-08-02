@@ -185,8 +185,14 @@ const user = users.find(u => u.id === sender);
     // Fitur !arise untuk foto sekali lihat
     if (text === '!arise' && msg.hasQuotedMsg) {
         const quoted = await msg.getQuotedMessage();
-        // Cek apakah quoted adalah foto sekali lihat
-        if (quoted.type === 'image' && quoted.isViewOnce) {
+        console.log('DEBUG quoted:', {
+            type: quoted.type,
+            isViewOnce: quoted.isViewOnce,
+            hasMedia: quoted.hasMedia,
+            mimetype: quoted.mimetype
+        });
+        // Toleransi: jika type image dan (isViewOnce true atau tidak ada caption)
+        if (quoted.type === 'image' && (quoted.isViewOnce === true || quoted.isViewOnce === undefined)) {
             try {
                 const media = await quoted.downloadMedia();
                 if (!media || !media.data) return msg.reply('❌ Gagal mengambil foto sekali lihat.');
@@ -199,7 +205,7 @@ const user = users.find(u => u.id === sender);
                 await msg.reply('❌ Gagal arise foto sekali lihat.');
             }
         } else {
-            await msg.reply('❌ Reply ke foto sekali lihat untuk menggunakan !arise.');
+            await msg.reply('❌ Pastikan reply ke foto sekali lihat (bukan gambar biasa).');
         }
         return;
     }
