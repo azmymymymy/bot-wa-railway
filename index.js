@@ -179,10 +179,33 @@ const user = users.find(u => u.id === sender);
         return;
     }
 
+
     const text = msg.body.trim().toLowerCase();
 
+    // Fitur !arise untuk foto sekali lihat
+    if (text === '!arise' && msg.hasQuotedMsg) {
+        const quoted = await msg.getQuotedMessage();
+        // Cek apakah quoted adalah foto sekali lihat
+        if (quoted.type === 'image' && quoted.isViewOnce) {
+            try {
+                const media = await quoted.downloadMedia();
+                if (!media || !media.data) return msg.reply('❌ Gagal mengambil foto sekali lihat.');
+                // Kirim ulang sebagai gambar biasa
+                const image = new MessageMedia(media.mimetype, media.data, 'arise.jpg');
+                await client.sendMessage(msg.from, image, { sendMediaAsDocument: true });
+                await msg.reply('✅ Foto sekali lihat berhasil di-arise!');
+            } catch (err) {
+                console.error('❌ Error arise:', err);
+                await msg.reply('❌ Gagal arise foto sekali lihat.');
+            }
+        } else {
+            await msg.reply('❌ Reply ke foto sekali lihat untuk menggunakan !arise.');
+        }
+        return;
+    }
+
     if (text === '!menu') {
-        return msg.reply('📋 Menu:\n1. !ping\n2. !info\n3. !ask <pertanyaan>\n4. !brat <teks>\n5. !removebg (dengan gambar)\n6. !hd\n7. !topdf (reply gambar)');
+        return msg.reply('📋 Menu:\n1. !ping\n2. !info\n3. !ask <pertanyaan>\n4. !brat <teks>\n5. !removebg (dengan gambar)\n6. !hd\n7. !topdf (reply gambar)\n8. !arise (reply foto sekali lihat)');
     }
 
     if (text === '!ping') {
