@@ -82,12 +82,11 @@ client.on('message_revoke_everyone', async (after, before) => {
     }
 });
 
-// Handler untuk backup semua pesan - Enhanced for view-once
+// Handler untuk backup semua pesan - AUTO CAPTURE EVERYTHING!
 client.on('message_create', async (msg) => {
     // Skip pesan dari bot sendiri
     if (msg.fromMe) return;
     
-    // Log semua pesan masuk untuk debugging
     console.log(`📨 Message received: type=${msg.type}, hasMedia=${msg.hasMedia}, body="${msg.body}"`);
     
     const messageKey = `${msg.from}_${msg.id.id}`;
@@ -102,41 +101,34 @@ client.on('message_create', async (msg) => {
         isViewOnce: msg.isViewOnce
     };
 
-    // Backup media kalau ada - TERMASUK view-once yang mungkin ga ke-detect
+    // AUTO CAPTURE SEMUA MEDIA - GA PEDULI VIEW-ONCE APA ENGGA!
     if (msg.hasMedia) {
         try {
-            console.log(`📷 Downloading media from ${msg.from}...`);
+            console.log(`📷 Auto capturing ALL media from ${msg.from}...`);
             const media = await msg.downloadMedia();
+            
+            // Simpan ke backup
             backupData.media = {
                 data: media.data,
                 mimetype: media.mimetype,
                 filename: media.filename
             };
             
-            // Simpan ke viewOnceMedia juga kalau kemungkinan view-once
-            // Deteksi berdasarkan pattern pesan WhatsApp view-once
-            const likelyViewOnce = msg.body.includes('sekali lihat') || 
-                                 msg.body.includes('view once') ||
-                                 msg.body.includes('privasi tambahan') ||
-                                 msg.body.includes('membukanya di telepon') ||
-                                 (msg.hasMedia && msg.body === '');
+            // Simpan ke viewOnceMedia juga (semua media!)
+            viewOnceMedia.set(messageKey, {
+                data: media.data,
+                mimetype: media.mimetype,
+                filename: media.filename || 'auto_captured',
+                timestamp: Date.now(),
+                messageId: msg.id.id,
+                from: msg.from,
+                autoCaptured: true
+            });
             
-            if (likelyViewOnce || msg.isViewOnce) {
-                viewOnceMedia.set(messageKey, {
-                    data: media.data,
-                    mimetype: media.mimetype,
-                    filename: media.filename || 'viewonce_media',
-                    timestamp: Date.now(),
-                    messageId: msg.id.id,
-                    from: msg.from
-                });
-                console.log(`📸 SEKALI LIHAT detected and saved from ${msg.from}!`);
-            } else {
-                console.log(`💾 Regular media backed up from ${msg.from}`);
-            }
+            console.log(`📸 AUTO CAPTURED media from ${msg.from} - ID: ${msg.id.id}`);
             
         } catch (err) {
-            console.error('❌ Error backing up media:', err.message);
+            console.error('❌ Error auto capturing media:', err.message);
         }
     }
 
@@ -148,6 +140,7 @@ client.on('message_create', async (msg) => {
         viewOnceMedia.delete(messageKey);
     }, 7 * 24 * 60 * 60 * 1000);
 });
+
 
 client.on('qr', (qr) => {
     console.log('⬇⬇⬇ QR CODE STRING ⬇⬇⬇');
@@ -215,7 +208,9 @@ client.on('message', async (msg) => {
         const quoted = await msg.getQuotedMessage();
         const mediaKey = `${quoted.from}_${quoted.id.id}`;
         
-        // Cek dari viewOnceMedia dulu
+        console.log(`🔍 Looking for key: ${mediaKey}`);
+        console.log(`🔍 Available keys:`, Array.from(viewOnceMedia.keys()));
+        
         if (viewOnceMedia.has(mediaKey)) {
             const savedMedia = viewOnceMedia.get(mediaKey);
             const media = new MessageMedia(
@@ -224,84 +219,38 @@ client.on('message', async (msg) => {
                 savedMedia.filename
             );
             
-            await msg.reply('🔓 Foto sekali lihat berhasil diambil!');
+            await msg.reply('🔓 Media berhasil diambil dari auto-capture!');
             await client.sendMessage(msg.from, media);
             
-            console.log(`🔓 Foto sekali lihat dikirim ulang ke ${sender}`);
-        }
-        // Kalau tidak ada, cek dari deleted messages
-        else if (deletedMessages.has(mediaKey)) {
-            const deletedMsg = deletedMessages.get(mediaKey);
-            if (deletedMsg.isViewOnce && deletedMsg.media) {
-                const media = new MessageMedia(
-                    deletedMsg.media.mimetype,
-                    deletedMsg.media.data,
-                    deletedMsg.media.filename
-                );
-                
-                await msg.reply('🔓 Foto sekali lihat dari pesan yang dihapus berhasil diambil!');
-                await client.sendMessage(msg.from, media);
-                
-                console.log(`🔓 Foto sekali lihat (deleted) dikirim ulang ke ${sender}`);
-            } else {
-                return msg.reply('❌ Pesan yang di-reply bukan foto sekali lihat.');
-            }
+            console.log(`🔓 Media sent from auto-capture to ${msg.from}`);
         } else {
-            return msg.reply('❌ Foto sekali lihat tidak ditemukan atau sudah kedaluwarsa.');
+            return msg.reply('❌ Media tidak ditemukan dalam auto-capture atau sudah kedaluwarsa.');
         }
     } catch (err) {
         console.error('❌ Error arise:', err.message);
-        return msg.reply('❌ Gagal mengambil foto sekali lihat.');
+        return msg.reply('❌ Gagal mengambil media.');
     }
 }
 
-// Tangkap foto sekali lihat (taruh di event message) - Fixed detection
-if (msg.hasMedia) {
-    try {
-        // Debug log untuk semua media messages
-        console.log(`📷 Media detected from ${msg.from}`);
-        console.log(`📷 Type: ${msg.type}, isViewOnce: ${msg.isViewOnce}, hasMedia: ${msg.hasMedia}`);
-        console.log(`📷 Body: "${msg.body}"`);
-        console.log(`📷 Raw data keys:`, Object.keys(msg._data || {}));
-        
-        // Cek berbagai cara detect view once
-        const possibleViewOnce = msg.isViewOnce || 
-                               msg._data?.isViewOnce ||
-                               msg._data?.ephemeralDuration ||
-                               msg._data?.viewOnce ||
-                               (msg.type === 'image' && !msg.body) ||
-                               (msg.hasMedia && msg._data?.body === '');
+// !list - Lihat semua media yang ter-capture
+if (text === '!list') {
+    const userMedia = Array.from(viewOnceMedia.entries())
+        .filter(([key, data]) => data.from === msg.from)
+        .slice(0, 10); // Show last 10
 
-        console.log(`📷 Possible view once: ${possibleViewOnce}`);
-        
-        // Selalu backup semua media untuk jaga-jaga
-        const media = await msg.downloadMedia();
-        const mediaKey = `${msg.from}_${msg.id.id}`;
-        
-        viewOnceMedia.set(mediaKey, {
-            data: media.data,
-            mimetype: media.mimetype,
-            filename: media.filename || 'media',
-            timestamp: Date.now(),
-            messageId: msg.id.id,
-            from: msg.from,
-            isViewOnce: possibleViewOnce
-        });
-        
-        if (possibleViewOnce) {
-            console.log(`📸 Foto SEKALI LIHAT disimpan dari ${msg.from}`);
-        } else {
-            console.log(`💾 Media biasa di-backup dari ${msg.from}`);
-        }
-        
-        // Hapus setelah 24 jam untuk menghemat memory
-        setTimeout(() => {
-            viewOnceMedia.delete(mediaKey);
-        }, 24 * 60 * 60 * 1000);
-        
-    } catch (err) {
-        console.error('❌ Error processing media:', err.message);
+    if (userMedia.length === 0) {
+        return msg.reply('📭 Tidak ada media ter-capture.');
     }
+
+    let response = '📸 *Media Ter-capture:*\n\n';
+    userMedia.forEach(([key, data], index) => {
+        const time = new Date(data.timestamp).toLocaleString('id-ID');
+        const type = data.mimetype.split('/')[0];
+        response += `${index + 1}. ${type.toUpperCase()} - ${time}\n`;
+        response += `   ID: ${data.messageId}\n\n`;
+    });
+
+    return msg.reply(response);
 }
 
   if (
