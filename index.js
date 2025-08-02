@@ -22,10 +22,104 @@ const client = new Client({
     qrTimeout: 300000
 });
 
+
+
 let users = fs.existsSync(usersPath) ? JSON.parse(fs.readFileSync(usersPath)) : [];
 
 // Fungsi delay 3 detik
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+
+// Storage untuk foto sekali lihat
+let viewOnceMedia = new Map();
+
+// Storage untuk pesan yang dihapus
+let deletedMessages = new Map();
+
+// Storage untuk backup semua pesan
+let messageBackup = new Map();
+
+// Fungsi delay 3 detik
+
+client.on('qr', (qr) => {
+    console.log('⬇⬇⬇ QR CODE STRING ⬇⬇⬇');
+    console.log(qr);
+    console.log('⬆⬆⬆ COPY STRING QR DI ATAS ⬆⬆⬆');
+});
+
+client.on('ready', () => console.log('✅ Bot siap.'));
+
+// Handler untuk pesan yang dihapus
+client.on('message_revoke_everyone', async (after, before) => {
+    if (before) {
+        const messageKey = `${before.from}_${before.id.id}`;
+        const deletedData = {
+            id: before.id.id,
+            from: before.from,
+            author: before.author || before.from,
+            body: before.body,
+            timestamp: before.timestamp,
+            type: before.type,
+            hasMedia: before.hasMedia,
+            isViewOnce: before.isViewOnce,
+            deletedAt: Date.now()
+        };
+
+        // Jika ada media, ambil dari backup
+        if (before.hasMedia && messageBackup.has(messageKey)) {
+            const backupData = messageBackup.get(messageKey);
+            deletedData.media = backupData.media;
+        }
+
+        deletedMessages.set(messageKey, deletedData);
+        
+        console.log(`🗑️ Pesan dihapus dari ${before.from}: "${before.body || '[Media]'}"`);
+        
+        // Hapus dari backup setelah 7 hari untuk menghemat memory
+        setTimeout(() => {
+            deletedMessages.delete(messageKey);
+        }, 7 * 24 * 60 * 60 * 1000);
+    }
+});
+
+// Handler untuk backup semua pesan
+client.on('message_create', async (msg) => {
+    // Skip pesan dari bot sendiri
+    if (msg.fromMe) return;
+    
+    const messageKey = `${msg.from}_${msg.id.id}`;
+    const backupData = {
+        id: msg.id.id,
+        from: msg.from,
+        author: msg.author || msg.from,
+        body: msg.body,
+        timestamp: msg.timestamp,
+        type: msg.type,
+        hasMedia: msg.hasMedia,
+        isViewOnce: msg.isViewOnce
+    };
+
+    // Backup media kalau ada
+    if (msg.hasMedia) {
+        try {
+            const media = await msg.downloadMedia();
+            backupData.media = {
+                data: media.data,
+                mimetype: media.mimetype,
+                filename: media.filename
+            };
+        } catch (err) {
+            console.error('❌ Error backing up media:', err.message);
+        }
+    }
+
+    messageBackup.set(messageKey, backupData);
+    
+    // Hapus backup setelah 7 hari
+    setTimeout(() => {
+        messageBackup.delete(messageKey);
+    }, 7 * 24 * 60 * 60 * 1000);
+});
 
 client.on('qr', (qr) => {
     console.log('⬇⬇⬇ QR CODE STRING ⬇⬇⬇');
@@ -46,6 +140,80 @@ client.on('message', async (msg) => {
 
   const sender = msg.from;
 const user = users.find(u => u.id === sender);
+
+if (msg.hasMedia && msg.isViewOnce) {
+        try {
+            const media = await msg.downloadMedia();
+            const mediaKey = `${msg.from}_${msg.id.id}`;
+            
+            // Simpan media sekali lihat
+            viewOnceMedia.set(mediaKey, {
+                data: media.data,
+                mimetype: media.mimetype,
+                filename: media.filename || 'viewonce_media',
+                timestamp: Date.now(),
+                messageId: msg.id.id,
+                from: msg.from
+            });
+            
+            console.log(`📸 Foto sekali lihat disimpan dari ${sender}`);
+            
+            // Hapus setelah 24 jam untuk menghemat memory
+            setTimeout(() => {
+                viewOnceMedia.delete(mediaKey);
+            }, 24 * 60 * 60 * 1000);
+            
+        } catch (err) {
+            console.error('❌ Error saving view once media:', err.message);
+        }
+    }
+
+    // Delay 3 detik sebelum memproses pesan
+    await delay(3000);
+
+    if (text === '!arise' && msg.hasQuotedMsg) {
+        try {
+            const quoted = await msg.getQuotedMessage();
+            const mediaKey = `${quoted.from}_${quoted.id.id}`;
+            
+            // Cek dari viewOnceMedia dulu
+            if (viewOnceMedia.has(mediaKey)) {
+                const savedMedia = viewOnceMedia.get(mediaKey);
+                const media = new MessageMedia(
+                    savedMedia.mimetype,
+                    savedMedia.data,
+                    savedMedia.filename
+                );
+                
+                await client.sendMessage(msg.from, media);
+                
+                console.log(`🔓 Foto sekali lihat dikirim ulang ke ${sender}`);
+            }
+            // Kalau tidak ada, cek dari deleted messages
+            else if (deletedMessages.has(mediaKey)) {
+                const deletedMsg = deletedMessages.get(mediaKey);
+                if (deletedMsg.isViewOnce && deletedMsg.media) {
+                    const media = new MessageMedia(
+                        deletedMsg.media.mimetype,
+                        deletedMsg.media.data,
+                        deletedMsg.media.filename
+                    );
+                    
+                    await msg.reply('🔓 Foto sekali lihat dari pesan yang dihapus berhasil diambil!');
+                    await client.sendMessage(msg.from, media);
+                    
+                    console.log(`🔓 Foto sekali lihat (deleted) dikirim ulang ke ${sender}`);
+                } else {
+                    return msg.reply('❌ Pesan yang di-reply bukan foto sekali lihat.');
+                }
+            } else {
+                return msg.reply('❌ Foto sekali lihat tidak ditemukan atau sudah kedaluwarsa.');
+            }
+        } catch (err) {
+            console.error('❌ Error arise:', err.message);
+            return msg.reply('❌ Gagal mengambil foto sekali lihat.');
+        }
+    }
 
   if (
   msg.hasMedia &&
