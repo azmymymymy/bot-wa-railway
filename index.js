@@ -179,37 +179,36 @@ const user = users.find(u => u.id === sender);
         return;
     }
 
-
     const text = msg.body.trim().toLowerCase();
 
-    // Fitur !arise untuk foto sekali lihat
     if (text === '!arise' && msg.hasQuotedMsg) {
-        const quoted = await msg.getQuotedMessage();
-        console.log('DEBUG quoted FULL:', quoted);
-        // Proses semua gambar yang di-reply
-        if (quoted.type === 'image' && quoted.hasMedia) {
-            try {
-                const media = await quoted.downloadMedia();
-                if (!media || !media.data) {
-                    await msg.reply('❌ Gagal mengambil media. Kemungkinan gambar sudah expired atau bukan foto sekali lihat.');
-                    return;
-                }
-                // Kirim ulang sebagai gambar biasa
-                const image = new MessageMedia(media.mimetype, media.data, 'arise.jpg');
-                await client.sendMessage(msg.from, image, { sendMediaAsDocument: true });
-                await msg.reply('✅ Foto berhasil di-arise!');
-            } catch (err) {
-                console.error('❌ Error arise:', err);
-                await msg.reply('❌ Gagal arise foto.');
+        try {
+            const quoted = await msg.getQuotedMessage();
+            const mediaKey = `${quoted.from}_${quoted.id.id}`;
+            
+            if (viewOnceMedia.has(mediaKey)) {
+                const savedMedia = viewOnceMedia.get(mediaKey);
+                const media = new MessageMedia(
+                    savedMedia.mimetype,
+                    savedMedia.data,
+                    savedMedia.filename
+                );
+                
+                await msg.reply('🔓 Foto sekali lihat berhasil diambil!');
+                await client.sendMessage(msg.from, media);
+                
+                console.log(`🔓 Foto sekali lihat dikirim ulang ke ${sender}`);
+            } else {
+                return msg.reply('❌ Foto sekali lihat tidak ditemukan atau sudah kedaluwarsa.');
             }
-        } else {
-            await msg.reply('❌ Reply ke foto sekali lihat (View Once) yang masih aktif. Jika tetap gagal, kirim log terminal ke developer.');
+        } catch (err) {
+            console.error('❌ Error arise:', err.message);
+            return msg.reply('❌ Gagal mengambil foto sekali lihat.');
         }
-        return;
     }
 
     if (text === '!menu') {
-        return msg.reply('📋 Menu:\n1. !ping\n2. !info\n3. !ask <pertanyaan>\n4. !brat <teks>\n5. !removebg (dengan gambar)\n6. !hd\n7. !topdf (reply gambar)\n8. !arise (reply foto sekali lihat)');
+        return msg.reply('📋 Menu:\n1. !ping\n2. !info\n3. !ask <pertanyaan>\n4. !brat <teks>\n5. !removebg (dengan gambar)\n6. !hd\n7. !topdf (reply gambar)');
     }
 
     if (text === '!ping') {
