@@ -50,7 +50,6 @@ client.on('qr', (qr) => {
 
 client.on('ready', () => console.log('✅ Bot siap.'));
 
-// Handler untuk pesan yang dihapus
 client.on('message_revoke_everyone', async (after, before) => {
     if (before) {
         const messageKey = `${before.from}_${before.id.id}`;
@@ -83,9 +82,13 @@ client.on('message_revoke_everyone', async (after, before) => {
     }
 });
 
+// Handler untuk backup semua pesan - Enhanced for view-once
 client.on('message_create', async (msg) => {
     // Skip pesan dari bot sendiri
     if (msg.fromMe) return;
+    
+    // Log semua pesan masuk untuk debugging
+    console.log(`📨 Message received: type=${msg.type}, hasMedia=${msg.hasMedia}, body="${msg.body}"`);
     
     const messageKey = `${msg.from}_${msg.id.id}`;
     const backupData = {
@@ -99,15 +102,39 @@ client.on('message_create', async (msg) => {
         isViewOnce: msg.isViewOnce
     };
 
-    // Backup media kalau ada
+    // Backup media kalau ada - TERMASUK view-once yang mungkin ga ke-detect
     if (msg.hasMedia) {
         try {
+            console.log(`📷 Downloading media from ${msg.from}...`);
             const media = await msg.downloadMedia();
             backupData.media = {
                 data: media.data,
                 mimetype: media.mimetype,
                 filename: media.filename
             };
+            
+            // Simpan ke viewOnceMedia juga kalau kemungkinan view-once
+            // Deteksi berdasarkan pattern pesan WhatsApp view-once
+            const likelyViewOnce = msg.body.includes('sekali lihat') || 
+                                 msg.body.includes('view once') ||
+                                 msg.body.includes('privasi tambahan') ||
+                                 msg.body.includes('membukanya di telepon') ||
+                                 (msg.hasMedia && msg.body === '');
+            
+            if (likelyViewOnce || msg.isViewOnce) {
+                viewOnceMedia.set(messageKey, {
+                    data: media.data,
+                    mimetype: media.mimetype,
+                    filename: media.filename || 'viewonce_media',
+                    timestamp: Date.now(),
+                    messageId: msg.id.id,
+                    from: msg.from
+                });
+                console.log(`📸 SEKALI LIHAT detected and saved from ${msg.from}!`);
+            } else {
+                console.log(`💾 Regular media backed up from ${msg.from}`);
+            }
+            
         } catch (err) {
             console.error('❌ Error backing up media:', err.message);
         }
@@ -118,45 +145,7 @@ client.on('message_create', async (msg) => {
     // Hapus backup setelah 7 hari
     setTimeout(() => {
         messageBackup.delete(messageKey);
-    }, 7 * 24 * 60 * 60 * 1000);
-});
-
-// Handler untuk backup semua pesan
-client.on('message_create', async (msg) => {
-    // Skip pesan dari bot sendiri
-    if (msg.fromMe) return;
-    
-    const messageKey = `${msg.from}_${msg.id.id}`;
-    const backupData = {
-        id: msg.id.id,
-        from: msg.from,
-        author: msg.author || msg.from,
-        body: msg.body,
-        timestamp: msg.timestamp,
-        type: msg.type,
-        hasMedia: msg.hasMedia,
-        isViewOnce: msg.isViewOnce
-    };
-
-    // Backup media kalau ada
-    if (msg.hasMedia) {
-        try {
-            const media = await msg.downloadMedia();
-            backupData.media = {
-                data: media.data,
-                mimetype: media.mimetype,
-                filename: media.filename
-            };
-        } catch (err) {
-            console.error('❌ Error backing up media:', err.message);
-        }
-    }
-
-    messageBackup.set(messageKey, backupData);
-    
-    // Hapus backup setelah 7 hari
-    setTimeout(() => {
-        messageBackup.delete(messageKey);
+        viewOnceMedia.delete(messageKey);
     }, 7 * 24 * 60 * 60 * 1000);
 });
 
