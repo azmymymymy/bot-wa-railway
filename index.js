@@ -141,34 +141,34 @@ client.on('message_create', async (msg) => {
         isViewOnce: msg.isViewOnce
     };
 
-    // AUTO CAPTURE SEMUA MEDIA regular
-    if (msg.hasMedia) {
-        try {
-            console.log(`📷 Auto capturing media from ${msg.from}...`);
-            const media = await msg.downloadMedia();
-            
-            backupData.media = {
-                data: media.data,
-                mimetype: media.mimetype,
-                filename: media.filename
-            };
-            
-            viewOnceMedia.set(messageKey, {
-                data: media.data,
-                mimetype: media.mimetype,
-                filename: media.filename || 'auto_captured',
-                timestamp: Date.now(),
-                messageId: msg.id.id,
-                from: msg.from,
-                autoCaptured: true
-            });
-            
-            console.log(`📸 AUTO CAPTURED regular media from ${msg.from}`);
-            
-        } catch (err) {
-            console.error('❌ Error auto capturing media:', err.message);
-        }
-    }
+    // AUTO CAPTURE SEMUA MEDIA regular - DINONAKTIFKAN KARENA ERROR
+    // if (msg.hasMedia) {
+    //     try {
+    //         console.log(`📷 Auto capturing media from ${msg.from}...`);
+    //         const media = await msg.downloadMedia();
+    //         
+    //         backupData.media = {
+    //             data: media.data,
+    //             mimetype: media.mimetype,
+    //             filename: media.filename
+    //         };
+    //         
+    //         viewOnceMedia.set(messageKey, {
+    //             data: media.data,
+    //             mimetype: media.mimetype,
+    //             filename: media.filename || 'auto_captured',
+    //             timestamp: Date.now(),
+    //             messageId: msg.id.id,
+    //             from: msg.from,
+    //             autoCaptured: true
+    //         });
+    //         
+    //         console.log(`📸 AUTO CAPTURED regular media from ${msg.from}`);
+    //         
+    //     } catch (err) {
+    //         console.error('❌ Error auto capturing media:', err.message);
+    //     }
+    // }
 
     messageBackup.set(messageKey, backupData);
     
